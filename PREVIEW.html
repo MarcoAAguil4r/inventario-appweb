@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario SaaS - Landing Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        header {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+        
+        nav a {
+            text-decoration: none;
+            color: #666;
+            transition: color 0.3s;
+        }
+        
+        nav a:hover {
+            color: #111;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: none;
+            font-size: 1rem;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn-secondary {
+            border: 2px solid #111;
+            color: #111;
+            background: transparent;
+        }
+        
+        .btn-secondary:hover {
+            background: #111;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .hero {
+            background: linear-gradient(to bottom right, #f3f4f6, #f0f0f0);
+            padding: 5rem 2rem;
+        }
+        
+        .hero-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .hero h1 {
+            font-size: 3rem;
+            line-height: 1.2;
+            margin-bottom: 1.5rem;
+        }
+        
+        .hero p {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 2rem;
+            line-height: 1.8;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .features {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .feature-icon {
+            font-size: 1.5rem;
+        }
+        
+        .dashboard-preview {
+            background: white;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e5e7eb;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat {
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        
+        .stat-blue {
+            background: #eff6ff;
+        }
+        
+        .stat-red {
+            background: #fef2f2;
+        }
+        
+        .stat-green {
+            background: #f0fdf4;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-blue .stat-value {
+            color: #2563eb;
+        }
+        
+        .stat-red .stat-value {
+            color: #dc2626;
+        }
+        
+        .stat-green .stat-value {
+            color: #16a34a;
+        }
+        
+        .chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.5rem;
+            height: 120px;
+        }
+        
+        .bar {
+            flex: 1;
+            background: #60a5fa;
+            border-radius: 0.25rem 0.25rem 0 0;
+        }
+        
+        .section {
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+        
+        .section h2 {
+            font-size: 2.25rem;
+            margin-bottom: 3rem;
+        }
+        
+        .how-it-works {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .step {
+            text-align: center;
+        }
+        
+        .step-icon {
+            width: 60px;
+            height: 60px;
+            background: #2563eb;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin: 0 auto 1rem;
+        }
+        
+        .step h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .step p {
+            color: #666;
+        }
+        
+        footer {
+            background: #111;
+            color: #999;
+            padding: 3rem 2rem;
+        }
+        
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .footer-section h4 {
+            color: white;
+            margin-bottom: 1rem;
+        }
+        
+        .footer-section a {
+            display: block;
+            color: #999;
+            text-decoration: none;
+            margin-bottom: 0.5rem;
+            transition: color 0.3s;
+        }
+        
+        .footer-section a:hover {
+            color: white;
+        }
+        
+        .footer-divider {
+            border-top: 1px solid #333;
+            padding-top: 2rem;
+            margin-top: 2rem;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .hero-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .how-it-works {
+                grid-template-columns: 1fr;
+            }
+            
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            nav {
+                display: none;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVBAR -->
+    <header>
+        <div class="logo">📦 Inventario</div>
+        <nav>
+            <a href="#inicio">Inicio</a>
+            <a href="#solucion">Solución</a>
+            <a href="#demo">Demo</a>
+            <button class="btn btn-primary">Entrar</button>
+        </nav>
+    </header>
+
+    <!-- HERO SECTION -->
+    <section class="hero">
+        <div class="hero-content">
+            <div>
+                <h1>¿Pierdes ventas por no controlar tu inventario?</h1>
+                <p>Controla tu stock en tiempo real, registra entradas y salidas y obtén reportes automáticos sin hojas de cálculo ni registros manuales.</p>
+                
+                <div class="buttons">
+                    <button class="btn btn-primary">Prueba Gratis</button>
+                    <button class="btn btn-secondary">Ver Demo</button>
+                </div>
+
+                <div class="features">
+                    <div class="feature">
+                        <span class="feature-icon">📦</span>
+                        <span>+230 productos</span>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">📈</span>
+                        <span>Reportes automáticos</span>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">🔔</span>
+                        <span>Alertas de stock bajo</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD PREVIEW -->
+            <div class="dashboard-preview">
+                <div class="stats">
+                    <div class="stat stat-blue">
+                        <div class="stat-label">Inventario Total</div>
+                        <div class="stat-value">235</div>
+                    </div>
+                    <div class="stat stat-red">
+                        <div class="stat-label">Productos bajos</div>
+                        <div class="stat-value">12</div>
+                    </div>
+                </div>
+
+                <div class="stat stat-green">
+                    <div class="stat-label">Ventas hoy</div>
+                    <div class="stat-value">$2,430</div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <div class="stat-label" style="text-align: left; color: #333; font-weight: 600;">Movimiento de Stock</div>
+                    <div class="chart">
+                        <div class="bar" style="height: 50%;"></div>
+                        <div class="bar" style="height: 65%;"></div>
+                        <div class="bar" style="height: 85%;"></div>
+                        <div class="bar" style="height: 60%;"></div>
+                        <div class="bar" style="height: 100%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.875rem; color: #666; margin-top: 0.5rem;">
+                        <span>Lun</span>
+                        <span>Mar</span>
+                        <span>Mié</span>
+                        <span>Jue</span>
+                        <span>Vie</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section" style="background: white;">
+        <h2>¿Cómo funciona?</h2>
+        <div class="how-it-works">
+            <div class="step">
+                <div class="step-icon">➕</div>
+                <h3>Agrega productos</h3>
+                <p>Registra todos tus productos con nombre, precio y cantidad inicial</p>
+            </div>
+            <div class="step">
+                <div class="step-icon">↔️</div>
+                <h3>Controla entradas y salidas</h3>
+                <p>Registra compras, ventas y ajustes de inventario en tiempo real</p>
+            </div>
+            <div class="step">
+                <div class="step-icon">📊</div>
+                <h3>Analiza reportes</h3>
+                <p>Obtén reportes detallados y gráficos de tu inventario automáticamente</p>
+            </div>
+        </div>
+        <div style="margin-top: 3rem;">
+            <p style="font-size: 1.1rem; color: #666; margin-bottom: 1rem;">Comienza a controlar tu inventario hoy mismo</p>
+            <button class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">Prueba Gratis - Sin tarjeta de crédito</button>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-grid">
+                <div>
+                    <div style="font-size: 1.25rem; font-weight: bold; color: white; margin-bottom: 0.5rem;">📦 Inventario</div>
+                    <p style="color: #999; font-size: 0.875rem;">Control de inventario moderno para tu negocio</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Producto</h4>
+                    <a href="#inicio">Inicio</a>
+                    <a href="#solucion">Solución</a>
+                    <a href="#contacto">Contacto</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Redes</h4>
+                    <a href="https://facebook.com">Facebook</a>
+                    <a href="https://instagram.com">Instagram</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <a href="#privacidad">Privacidad</a>
+                    <a href="#terminos">Términos</a>
+                </div>
+            </div>
+            <div class="footer-divider">
+                <p>© 2026 Inventario SaaS. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
