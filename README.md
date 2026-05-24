@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏢 Inventario SaaS - Landing Page
 
-## Getting Started
+Una moderna landing page profesional para un SaaS de control de inventario. Construida con **Next.js 16**, **React 19** y **Tailwind CSS 4** con un diseño minimalista y completamente responsive.
 
-First, run the development server:
+## 📸 Vista General
 
+La landing page incluye:
+- ✅ Navbar responsivo con menú hamburguesa
+- ✅ Hero section con propuesta de valor
+- ✅ Dashboard preview con métricas clave
+- ✅ Sección "Cómo funciona" con 3 pasos
+- ✅ Footer con enlaces y redes sociales
+- ✅ Diseño minimalista y profesional
+- ✅ Totalmente optimizado para SEO
+
+## 🚀 Inicio Rápido
+
+### 1. Instalar dependencias
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Ejecutar en desarrollo
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Luego abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Build para producción
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## 📁 Estructura del Proyecto
 
-To learn more about Next.js, take a look at the following resources:
+```
+inventario-appweb/
+├── app/
+│   ├── components/
+│   │   ├── Navbar.jsx              # Navegación responsiva
+│   │   ├── Hero.jsx                # Sección principal con CTA
+│   │   ├── HowItWorks.jsx           # Pasos del producto
+│   │   └── Footer.jsx              # Pie de página
+│   ├── globals.css                 # Estilos globales
+│   ├── layout.tsx                  # Layout principal
+│   └── page.tsx                    # Página de inicio
+├── public/                         # Archivos estáticos
+├── package.json
+├── tailwind.config.mjs
+└── tsconfig.json
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🎨 Componentes Principales
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Navbar
+- Logo: `📦 Inventario`
+- Navegación: Inicio, Solución, Demo
+- CTA: Botón "Entrar"
+- Menú hamburguesa en mobile
 
-## Deploy on Vercel
+### Hero
+- Título principal persuasivo
+- 2 botones CTA (Prueba Gratis, Ver Demo)
+- 3 características destacadas
+- Dashboard preview con métricas
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### How It Works
+- 3 pasos visuales claros
+- Descripción de cada paso
+- CTA final
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Footer
+- Logo y descripción
+- Secciones: Producto, Redes, Legal
+- Copyright dinámico
+
+## 📱 Responsividad
+
+100% responsive para:
+- Mobile (< 640px)
+- Tablet (640-1024px)
+- Desktop (> 1024px)
+
+## 🛠️ Tecnologías
+
+- **Next.js** 16.2.6 - Framework React moderno
+- **React** 19.2.4 - Librería UI
+- **Tailwind CSS** 4 - Framework de CSS utility-first
+- **TypeScript** 5 - Tipado estático
+- **ESLint** 9 - Linting
+
+## 🚢 Deployment
+
+### Vercel (Recomendado)
+```bash
+git push
+# Automáticamente deploya
+```
+
+### Servidor personalizado
+```bash
+npm run build
+npm start
+```
+
+## 📚 Documentación
+
+- [DESARROLLO.md](DESARROLLO.md) - Documentación técnica detallada
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Guía de implementación
+
+## 📝 Scripts
+
+```bash
+npm run dev      # Desarrollo
+npm run build    # Build
+npm start        # Producción
+npm run lint     # Linting
+```
+
+---
+
+© 2026 Inventario SaaS - Hecho con Next.js y Tailwind CSS
