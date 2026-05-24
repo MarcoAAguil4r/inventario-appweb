@@ -1,10 +1,17 @@
-import CtaForm from './components/CtaForm';
+import Navbar from './components/Navbar';
+import Hero from './components/Hero';
+import HowItWorks from './components/HowItWorks';
+import Footer from './components/Footer';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 pt-10">
-      {/* Aquí estamos montando exclusivamente tu componente para probar su lógica */}
-      <CtaForm />
-    </main>
+    <div className="flex flex-col min-h-screen bg-white">
+      <Navbar />
+      <main className="flex-1">
+        <Hero />
+        <HowItWorks />
+      </main>
+      <Footer />
+    </div>
   );
 }
