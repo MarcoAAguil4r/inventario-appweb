@@ -1,17 +1,13 @@
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
-import HowItWorks from './components/HowItWorks';
-import Footer from './components/Footer';
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <main className="flex-1">
+      <main className="pt-6">
         <Hero />
-        <HowItWorks />
       </main>
-      <Footer />
     </div>
   );
 }
