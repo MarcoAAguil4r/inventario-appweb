@@ -31,7 +31,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="#solucion" className="transition hover:text-white">
+                <Link href="/solucion" className="transition hover:text-white">
                   Solución
                 </Link>
               </li>
