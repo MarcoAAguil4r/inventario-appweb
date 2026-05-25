@@ -23,7 +23,7 @@ export default function Navbar() {
           <Link href="/" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
             Inicio
           </Link>
-          <Link href="#solucion" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
+          <Link href="/solucion" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
             Solución
           </Link>
           <Link href="#demo" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
@@ -60,7 +60,7 @@ export default function Navbar() {
             <Link href="/" className="text-slate-700 transition hover:text-slate-900">
               Inicio
             </Link>
-            <Link href="#solucion" className="text-slate-700 transition hover:text-slate-900">
+            <Link href="/solucion" className="text-slate-700 transition hover:text-slate-900">
               Solución
             </Link>
             <Link href="#demo" className="text-slate-700 transition hover:text-slate-900">
