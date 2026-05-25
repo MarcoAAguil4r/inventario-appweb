@@ -1,0 +1,16 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Prospecto {
+  id        Int      @id @default(autoincrement())
+  negocio   String
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

@@ -1,15 +1,26 @@
 import Navbar from './components/Navbar';
-import Hero from './components/Hero';
-import Features from './components/Features';
+import Hero from './components/Hero'; 
+import Solucion from './components/Solucion'; 
+import CtaForm from './components/CtaForm';
+import Footer from './components/Footer';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-slate-50">
+    <main className="flex min-h-screen flex-col bg-white">
+      {/* 1. Navegación (Karla) */}
       <Navbar />
-      <main className="pt-6">
-        <Hero />
-        <Features />
-      </main>
-    </div>
+
+      {/* 2. Problema y Promesa (Arturo) */}
+      <Hero />
+
+      {/* 3. Beneficios y Características (Luis) */}
+      <Solucion />
+
+      {/* 4. Formulario Funcional (Tú) */}
+      <CtaForm />
+
+      {/* 5. Pie de página (Karla) */}
+      <Footer />
+    </main>
   );
 }
