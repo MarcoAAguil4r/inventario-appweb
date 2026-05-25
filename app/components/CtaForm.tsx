@@ -24,54 +24,66 @@ export default function CtaForm() {
   };
 
   return (
-    <section className="flex flex-col items-center py-24 px-6 bg-gray-200 w-full">
-      <h2 className="text-3xl font-bold mb-4 text-gray-900 text-center">
-        Empieza a optimizar tu tiempo hoy.
-      </h2>
-      <p className="mb-10 text-lg text-gray-700 text-center">
-        Déjanos tus datos para probar el sistema:
-      </p>
-
-      <form 
-        ref={formRef} 
-        action={action} 
-        className="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg border-2 border-gray-200 flex flex-col gap-5"
-      >
-        <div className="flex flex-col gap-2 text-left">
-          <label htmlFor="negocio" className="text-sm font-semibold text-gray-600">Nombre del negocio</label>
-          <input 
-            type="text" 
-            id="negocio"
-            name="negocio"
-            required
-            placeholder="Ej. Abarrotes San Juan" 
-            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 transition-colors" 
-          />
+    <section id="contacto" className="relative w-full bg-slate-100 py-32">
+      <div id="demo" className="absolute -top-24" />
+      <div className="pointer-events-none absolute left-0 top-10 hidden h-44 w-44 rounded-full bg-sky-100/60 blur-3xl md:block" />
+      <div className="mx-auto relative flex max-w-7xl flex-col items-center px-6 sm:px-8 lg:px-12">
+        
+        <div className="max-w-3xl text-center">
+          <p className="mb-3 text-sm uppercase tracking-[0.3em] text-slate-500">Reserva tu lugar</p>
+          <h2 className="mb-4 text-3xl font-bold text-slate-950 sm:text-4xl leading-tight">
+            Empieza a optimizar tu tiempo hoy.
+          </h2>
+          <p className="mx-auto mb-10 max-w-2xl text-lg leading-8 text-slate-600">
+            Déjanos tus datos y un asesor te acompañará para activar tu demo sin compromiso.
+          </p>
         </div>
 
-        <div className="flex flex-col gap-2 text-left">
-          <label htmlFor="email" className="text-sm font-semibold text-gray-600">Correo electrónico</label>
-          <input 
-            type="email" 
-            id="email"
-            name="email"
-            required
-            placeholder="contacto@miempresa.com" 
-            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 transition-colors" 
-          />
-        </div>
-
-        {status === 'error' && <p className="text-red-500 text-sm font-medium">{message}</p>}
-        {status === 'success' && <p className="text-green-600 text-sm font-medium">{message}</p>}
-
-        <button 
-          type="submit" 
-          disabled={status === 'loading'}
-          className="w-full mt-4 py-4 bg-gray-900 text-white text-lg font-bold rounded-lg hover:bg-gray-800 transition disabled:bg-gray-500 disabled:cursor-not-allowed"
+        <form 
+          ref={formRef} 
+          action={action} 
+          className="w-full max-w-xl flex flex-col gap-6 rounded-[2rem] border border-slate-200 bg-white p-10 shadow-2xl shadow-slate-900/5"
         >
-          {status === 'loading' ? 'Enviando...' : 'Agendar Demostración'}
-        </button>
-      </form>
+          <div className="flex flex-col gap-2 text-left">
+            <label htmlFor="negocio" className="text-sm font-semibold text-slate-700">
+              Nombre del negocio
+            </label>
+            <input 
+              type="text" 
+              id="negocio"
+              name="negocio"
+              required
+              placeholder="Ej. Abarrotes San Juan" 
+              className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 p-4 outline-none transition-colors focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/10" 
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 text-left">
+            <label htmlFor="email" className="text-sm font-semibold text-slate-700">
+              Correo electrónico
+            </label>
+            <input 
+              type="email" 
+              id="email"
+              name="email"
+              required
+              placeholder="contacto@miempresa.com" 
+              className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 p-3 outline-none transition-colors focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/10" 
+            />
+          </div>
+
+          {status === 'error' && <p className="text-sm font-medium text-red-500">{message}</p>}
+          {status === 'success' && <p className="text-sm font-medium text-emerald-600">{message}</p>}
+
+          <button 
+            type="submit" 
+            disabled={status === 'loading'}
+            className="mt-4 w-full rounded-full bg-slate-950 py-4 text-base font-bold text-white shadow-lg shadow-slate-950/10 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
+          >
+            {status === 'loading' ? 'Enviando...' : 'Agendar Demostración'}
+          </button>
+        </form>
+      </div>
     </section>
   );
 }

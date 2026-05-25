@@ -4,8 +4,9 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-6 py-16 sm:px-8">
+    <footer className="w-full bg-slate-950 text-slate-100">
+      {/* Contenedor alineado con el resto de la página */}
+      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-[1.3fr_0.9fr_0.9fr]">
           <div className="space-y-4">
             <div className="flex items-center gap-3 text-white">
@@ -31,7 +32,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/solucion" className="transition hover:text-white">
+                <Link href="#solucion" className="transition hover:text-white">
                   Solución
                 </Link>
               </li>
@@ -47,8 +48,8 @@ export default function Footer() {
             <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Contacto</p>
             <ul className="space-y-3 text-sm text-slate-300">
               <li>hola@inventario.com</li>
-              <li>+52 55 1234 5678</li>
-              <li>Monterrey, México</li>
+              <li>+52 238 123 4567</li>
+              <li>Tehuacán, Puebla</li>
             </ul>
           </div>
         </div>
