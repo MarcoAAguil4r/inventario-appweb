@@ -1,3 +1,11 @@
+# inventario-appweb
+
+Una moderna landing page profesional para un SaaS de control de inventario. Construida con **Next.js 16**, **React 19** y **Tailwind CSS 4** con un diseño minimalista y completamente responsive.
+
+## Notas de la rama feature/seccion_Hero
+
+- Se implementó la sección Hero: título, descripción, CTA e imagen. Ver `app/components/Hero.tsx`.
+
 # 🏢 Inventario SaaS - Landing Page
 
 Una moderna landing page profesional para un SaaS de control de inventario. Construida con **Next.js 16**, **React 19** y **Tailwind CSS 4** con un diseño minimalista y completamente responsive.

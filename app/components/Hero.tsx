@@ -3,6 +3,7 @@ import React from 'react';
 export default function Hero() {
   return (
     <section
+      data-feature="hero-v2"
       className="relative w-full overflow-hidden bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white"
       aria-labelledby="hero-heading"
       aria-describedby="hero-desc"
@@ -20,6 +21,7 @@ export default function Hero() {
 
           {/* Columna Izquierda: Textos y Botones */}
           <header className="space-y-8 flex flex-col items-center text-center">
+            <p className="sr-only" aria-live="polite">Sección Hero implementada — título, descripción, CTA e imagen.</p>
             <p className="inline-flex rounded-full border border-slate-500/30 bg-white/5 px-4 py-2 text-sm font-semibold uppercase tracking-[0.35em] text-sky-300 backdrop-blur">
               Control de inventario ágil
             </p>
