@@ -50,6 +50,14 @@ export default function Hero() {
 
           {/* Columna Derecha: Tarjeta de Métricas */}
           <aside className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-slate-950/20 backdrop-blur-xl" aria-labelledby="hero-stats-title">
+            <div className="mb-6 flex justify-center" role="img" aria-hidden="false">
+              <img
+                src="/hero-illustration.svg"
+                alt="Vista previa del panel de control de inventario"
+                className="w-full max-w-[260px] rounded-xl"
+                loading="lazy"
+              />
+            </div>
             <div className="space-y-6">
               <div className="rounded-3xl bg-slate-950/90 p-6 text-slate-100">
                 <h2 id="hero-stats-title" className="text-sm uppercase tracking-[0.28em] text-sky-300">Resultados reales</h2>
