@@ -1,77 +1,79 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { submitLead } from '@/app/actions/submitLead';
+import { useState } from 'react';
+
+type Fields = { nombre: string; email: string };
 
 export default function CtaForm() {
-  const formRef = useRef<HTMLFormElement>(null);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
+  const [fields, setFields] = useState<Fields>({ nombre: '', email: '' });
 
-  const action = async (formData: FormData) => {
-    setStatus('loading');
-    
-    const result = await submitLead(formData);
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    setFields((prev) => ({ ...prev, [name]: value }));
+  }
 
-    if (result?.error) {
-      setStatus('error');
-      setMessage(result.error);
-    } else if (result?.success) {
-      setStatus('success');
-      setMessage('¡Gracias! Nos pondremos en contacto pronto.');
-      formRef.current?.reset();
-    }
-  };
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+  }
 
   return (
-    <section className="flex flex-col items-center py-24 px-6 bg-gray-200 w-full">
-      <h2 className="text-3xl font-bold mb-4 text-gray-900 text-center">
-        Empieza a optimizar tu tiempo hoy.
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-lg shadow-slate-900/5 sm:p-10"
+    >
+      <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Empieza gratis</p>
+      <h2 className="mt-3 text-2xl font-semibold text-slate-950 sm:text-3xl">
+        Prueba el sistema sin compromiso.
       </h2>
-      <p className="mb-10 text-lg text-gray-700 text-center">
-        Déjanos tus datos para probar el sistema:
+      <p className="mt-2 text-sm leading-7 text-slate-600">
+        Déjanos tus datos y te contactamos para activar tu acceso.
       </p>
 
-      <form 
-        ref={formRef} 
-        action={action} 
-        className="w-full max-w-md bg-white p-8 rounded-2xl shadow-lg border-2 border-gray-200 flex flex-col gap-5"
-      >
-        <div className="flex flex-col gap-2 text-left">
-          <label htmlFor="negocio" className="text-sm font-semibold text-gray-600">Nombre del negocio</label>
-          <input 
-            type="text" 
-            id="negocio"
-            name="negocio"
-            required
-            placeholder="Ej. Abarrotes San Juan" 
-            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 transition-colors" 
+      <div className="mt-8 space-y-5">
+        <div>
+          <label htmlFor="nombre" className="mb-1.5 block text-sm font-medium text-slate-700">
+            Nombre completo
+          </label>
+          <input
+            id="nombre"
+            name="nombre"
+            type="text"
+            autoComplete="name"
+            placeholder="Tu nombre"
+            value={fields.nombre}
+            onChange={handleChange}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-950/10"
           />
         </div>
 
-        <div className="flex flex-col gap-2 text-left">
-          <label htmlFor="email" className="text-sm font-semibold text-gray-600">Correo electrónico</label>
-          <input 
-            type="email" 
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
+            Correo electrónico
+          </label>
+          <input
             id="email"
             name="email"
-            required
-            placeholder="contacto@miempresa.com" 
-            className="w-full p-3 border-2 border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:border-blue-500 transition-colors" 
+            type="email"
+            autoComplete="email"
+            placeholder="tu@correo.com"
+            value={fields.email}
+            onChange={handleChange}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-950/10"
           />
         </div>
 
-        {status === 'error' && <p className="text-red-500 text-sm font-medium">{message}</p>}
-        {status === 'success' && <p className="text-green-600 text-sm font-medium">{message}</p>}
-
-        <button 
-          type="submit" 
-          disabled={status === 'loading'}
-          className="w-full mt-4 py-4 bg-gray-900 text-white text-lg font-bold rounded-lg hover:bg-gray-800 transition disabled:bg-gray-500 disabled:cursor-not-allowed"
+        <button
+          type="submit"
+          className="w-full rounded-full bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800"
         >
-          {status === 'loading' ? 'Enviando...' : 'Agendar Demostración'}
+          Solicitar acceso gratuito
         </button>
-      </form>
-    </section>
+
+        <p className="text-center text-xs text-slate-400">
+          Sin tarjeta de crédito · Respuesta en menos de 24 h
+        </p>
+      </div>
+    </form>
   );
 }
