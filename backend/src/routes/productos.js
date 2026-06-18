@@ -88,6 +88,47 @@ router.get('/', async (_req, res, next) => {
   }
 });
 
+router.get('/resumen/dia', async (_req, res, next) => {
+  try {
+    const [resumen] = await query(
+      `SELECT
+        COALESCE(SUM(
+          CASE
+            WHEN m.stock_nuevo > m.stock_anterior
+            THEN (m.stock_nuevo - m.stock_anterior) * (p.precio_venta - p.precio_compra)
+            ELSE 0
+          END
+        ), 0) AS ganancia_potencial,
+        COALESCE((
+          SELECT SUM(costo_perdida)
+          FROM mermas
+          WHERE DATE(creado_en) = CURRENT_DATE()
+        ), 0) AS perdidas,
+        COALESCE((
+          SELECT SUM(cantidad * precio_reducido)
+          FROM productos_danados
+          WHERE vendible = true AND DATE(creado_en) = CURRENT_DATE()
+        ), 0) AS valor_danado_vendible
+      FROM movimientos_inventario m
+      INNER JOIN productos p ON p.id_producto = m.id_producto
+      WHERE DATE(m.fecha) = CURRENT_DATE()`,
+    );
+
+    const gananciaPotencial = Number(resumen?.ganancia_potencial ?? 0);
+    const perdidas = Number(resumen?.perdidas ?? 0);
+    const valorDanadoVendible = Number(resumen?.valor_danado_vendible ?? 0);
+
+    return res.json({
+      ganancia_potencial: gananciaPotencial,
+      perdidas,
+      valor_danado_vendible: valorDanadoVendible,
+      balance_potencial: gananciaPotencial - perdidas,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/movimientos/recientes', async (_req, res, next) => {
   try {
     const movimientos = await query(

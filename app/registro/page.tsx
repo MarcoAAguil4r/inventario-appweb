@@ -7,28 +7,36 @@ import { useRouter } from 'next/navigation';
 import { apiRequest, saveSession } from '@/lib/api';
 import type { LoginResponse } from '@/lib/api';
 
-export default function LoginPage() {
+export default function RegistroPage() {
   const router = useRouter();
+  const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const data = await apiRequest<LoginResponse>('/api/auth/login', {
+      const data = await apiRequest<LoginResponse>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ correo, password }),
+        body: JSON.stringify({ nombre, correo, password, confirmPassword }),
       });
 
       saveSession(data.token, data.usuario);
       router.push('/inventario');
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'No se pudo iniciar sesión.');
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo crear la cuenta.');
     } finally {
       setIsLoading(false);
     }
@@ -50,22 +58,34 @@ export default function LoginPage() {
             </Link>
 
             <div className="mt-16 max-w-md">
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Acceso seguro</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Nueva cuenta</p>
               <h1 className="mt-5 text-4xl font-bold leading-tight sm:text-5xl">
-                Controla productos, stock y mermas desde un solo panel.
+                Crea un acceso para administrar el inventario.
               </h1>
               <p className="mt-6 text-base leading-8 text-slate-300">
-                Inicia sesión para administrar inventario, registrar productos dañados y mantener trazabilidad.
+                Registra tu cuenta para comenzar a controlar productos, stock mínimo, daños y pérdidas.
               </p>
             </div>
           </div>
 
           <div className="p-8 sm:p-12">
             <div className="mx-auto max-w-md">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Login</p>
-              <h2 className="mt-3 text-3xl font-bold text-slate-950">Entrar al sistema</h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Registro</p>
+              <h2 className="mt-3 text-3xl font-bold text-slate-950">Crear cuenta</h2>
 
               <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Nombre</span>
+                  <input
+                    value={nombre}
+                    onChange={(event) => setNombre(event.target.value)}
+                    type="text"
+                    required
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    placeholder="Administrador"
+                  />
+                </label>
+
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">Correo</span>
                   <input
@@ -74,7 +94,7 @@ export default function LoginPage() {
                     type="email"
                     required
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                    placeholder="admin@inventario.local"
+                    placeholder="usuario@negocio.com"
                   />
                 </label>
 
@@ -85,8 +105,22 @@ export default function LoginPage() {
                     onChange={(event) => setPassword(event.target.value)}
                     type="password"
                     required
+                    minLength={8}
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
-                    placeholder="Admin123!"
+                    placeholder="Mínimo 8 caracteres"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Confirmar contraseña</span>
+                  <input
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    type="password"
+                    required
+                    minLength={8}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    placeholder="Repite la contraseña"
                   />
                 </label>
 
@@ -97,14 +131,14 @@ export default function LoginPage() {
                   disabled={isLoading}
                   className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
                 >
-                  {isLoading ? 'Validando...' : 'Iniciar sesión'}
+                  {isLoading ? 'Creando cuenta...' : 'Crear cuenta'}
                 </button>
               </form>
 
               <p className="mt-6 text-center text-sm text-slate-600">
-                ¿No tienes cuenta?{' '}
-                <Link href="/registro" className="font-bold text-slate-950 hover:text-sky-700">
-                  Crea una cuenta
+                ¿Ya tienes cuenta?{' '}
+                <Link href="/login" className="font-bold text-slate-950 hover:text-sky-700">
+                  Inicia sesión
                 </Link>
               </p>
             </div>

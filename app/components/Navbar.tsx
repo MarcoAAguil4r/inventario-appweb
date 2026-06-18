@@ -110,6 +110,9 @@ export default function Navbar() {
           <Link href="/login" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
             Entrar
           </Link>
+          <Link href="/registro" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
+            Registro
+          </Link>
           <Link href="/inventario" className="rounded-full bg-slate-950 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-950/10 transition hover:bg-slate-800">
             Inventario
           </Link>
@@ -158,6 +161,9 @@ export default function Navbar() {
             </Link>
             <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center text-sm font-medium text-slate-700 transition hover:text-slate-900">
               Entrar
+            </Link>
+            <Link href="/registro" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center text-sm font-medium text-slate-700 transition hover:text-slate-900">
+              Registro
             </Link>
           </div>
         </div>

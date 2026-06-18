@@ -56,6 +56,13 @@ export type Merma = {
   creado_en: string;
 };
 
+export type ResumenDia = {
+  ganancia_potencial: number;
+  perdidas: number;
+  valor_danado_vendible: number;
+  balance_potencial: number;
+};
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export function getToken() {

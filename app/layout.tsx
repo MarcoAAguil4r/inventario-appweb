@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Inventario MVP - Gestión de Inventario",
-  description: "Sistema MVP para gestionar productos, stock, productos dañados, mermas y alertas de bajo inventario.",
+  title: "Inventario - Gestión de Inventario",
+  description: "Sistema para gestionar productos, stock, productos dañados, mermas y alertas de bajo inventario.",
 };
 
 export default function RootLayout({
