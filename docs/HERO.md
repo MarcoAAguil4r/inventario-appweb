@@ -1,11 +1,13 @@
-Sección Hero
-===========
+# Sección Hero
 
-Descripción breve:
+La sección Hero está implementada en `app/components/Hero.tsx`.
 
-- Presenta el título principal del sitio, una descripción introductoria, el botón principal (CTA) y una ilustración representativa.
-- Implementada en `app/components/Hero.tsx`.
+Incluye:
 
-Accesibilidad:
+- Título principal.
+- Descripción breve del producto.
+- CTA hacia la demo.
+- CTA hacia la sección de solución.
+- Ilustración del panel de inventario desde `public/hero-illustration.svg`.
 
-- Se añadió un elemento oculto para lectores de pantalla y atributos ARIA en los elementos principales.
+También define `id="inicio"` para que el navbar pueda navegar correctamente al inicio de la página.
