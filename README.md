@@ -1,124 +1,119 @@
-# 🏢 Inventario SaaS - Landing Page
+# inventario-appweb
 
-Una moderna landing page profesional para un SaaS de control de inventario. Construida con **Next.js 16**, **React 19** y **Tailwind CSS 4** con un diseño minimalista y completamente responsive.
+MVP de gestión de inventario congruente con la justificación técnica del proyecto:
 
-## 📸 Vista General
+- Frontend: React/Next.js + Tailwind CSS
+- Backend: Node.js + Express.js
+- Base de datos: MySQL
+- Autenticación: JWT + bcrypt
+- Deploy: Vercel para frontend y Railway para backend
 
-La landing page incluye:
-- ✅ Navbar responsivo con menú hamburguesa
-- ✅ Hero section con propuesta de valor
-- ✅ Dashboard preview con métricas clave
-- ✅ Sección "Cómo funciona" con 3 pasos
-- ✅ Footer con enlaces y redes sociales
-- ✅ Diseño minimalista y profesional
-- ✅ Totalmente optimizado para SEO
+## Estructura
 
-## 🚀 Inicio Rápido
-
-### 1. Instalar dependencias
-```bash
-npm install
+```txt
+app/
+  login/page.tsx
+  inventario/page.tsx
+backend/
+  src/server.js
+  src/routes/auth.js
+  src/routes/productos.js
+  src/schema.sql
+  src/seed.js
+lib/
+  api.ts
 ```
 
-### 2. Ejecutar en desarrollo
+## Inicio local
+
+Frontend:
+
 ```bash
+npm install
 npm run dev
 ```
 
-Luego abre [http://localhost:3000](http://localhost:3000) en tu navegador.
-
-### 3. Build para producción
-```bash
-npm run build
-npm start
-```
-
-## 📁 Estructura del Proyecto
-
-```
-inventario-appweb/
-├── app/
-│   ├── components/
-│   │   ├── Navbar.jsx              # Navegación responsiva
-│   │   ├── Hero.jsx                # Sección principal con CTA
-│   │   ├── HowItWorks.jsx           # Pasos del producto
-│   │   └── Footer.jsx              # Pie de página
-│   ├── globals.css                 # Estilos globales
-│   ├── layout.tsx                  # Layout principal
-│   └── page.tsx                    # Página de inicio
-├── public/                         # Archivos estáticos
-├── package.json
-├── tailwind.config.mjs
-└── tsconfig.json
-```
-
-## 🎨 Componentes Principales
-
-### Navbar
-- Logo: `📦 Inventario`
-- Navegación: Inicio, Solución, Demo
-- CTA: Botón "Entrar"
-- Menú hamburguesa en mobile
-
-### Hero
-- Título principal persuasivo
-- 2 botones CTA (Prueba Gratis, Ver Demo)
-- 3 características destacadas
-- Dashboard preview con métricas
-
-### How It Works
-- 3 pasos visuales claros
-- Descripción de cada paso
-- CTA final
-
-### Footer
-- Logo y descripción
-- Secciones: Producto, Redes, Legal
-- Copyright dinámico
-
-## 📱 Responsividad
-
-100% responsive para:
-- Mobile (< 640px)
-- Tablet (640-1024px)
-- Desktop (> 1024px)
-
-## 🛠️ Tecnologías
-
-- **Next.js** 16.2.6 - Framework React moderno
-- **React** 19.2.4 - Librería UI
-- **Tailwind CSS** 4 - Framework de CSS utility-first
-- **TypeScript** 5 - Tipado estático
-- **ESLint** 9 - Linting
-
-## 🚢 Deployment
-
-### Vercel (Recomendado)
-```bash
-git push
-# Automáticamente deploya
-```
-
-### Servidor personalizado
-```bash
-npm run build
-npm start
-```
-
-## 📚 Documentación
-
-- [DESARROLLO.md](DESARROLLO.md) - Documentación técnica detallada
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Guía de implementación
-
-## 📝 Scripts
+Backend:
 
 ```bash
-npm run dev      # Desarrollo
-npm run build    # Build
-npm start        # Producción
-npm run lint     # Linting
+cd backend
+npm install
+cp .env.example .env
+npm run dev
 ```
 
----
+Variables del frontend:
 
-© 2026 Inventario SaaS - Hecho con Next.js y Tailwind CSS
+```env
+NEXT_PUBLIC_API_URL="http://localhost:4000"
+```
+
+Variables del backend:
+
+```env
+DATABASE_URL="mysql://usuario:password@host:3306/inventario"
+JWT_SECRET="cambia-este-secreto-en-produccion"
+CORS_ORIGIN="http://localhost:3000"
+FRONTEND_URL="http://localhost:3000"
+PORT=4000
+```
+
+## Base de datos
+
+1. Crea una base de datos MySQL.
+2. Ejecuta el contenido de `backend/src/schema.sql`.
+3. Crea el usuario inicial:
+
+```bash
+cd backend
+npm run seed
+```
+
+Credenciales por defecto del seed:
+
+```txt
+Correo: admin@inventario.local
+Contraseña: Admin123!
+```
+
+Puedes cambiarlas con `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` y `SEED_USER_NAME`.
+
+## Flujo principal
+
+- Login con correo y contraseña.
+- Inventario protegido por JWT.
+- Registro de productos con categoría, precios, stock actual y stock mínimo.
+- Visualización de estado: disponible, bajo stock, agotado o desactivado.
+- Actualización de producto y stock.
+- Registro de producto dañado vendible con precio reducido.
+- Registro de merma o pérdida total.
+- Desactivación lógica de producto sin eliminar historial.
+- Registro de movimientos importantes en `movimientos_inventario`.
+
+## Deploy
+
+Frontend en Vercel:
+
+- Configura `NEXT_PUBLIC_API_URL` con la URL del backend de Railway.
+- Ejecuta build de Next.
+
+Backend en Railway:
+
+- Root directory: `backend`
+- Start command: `npm start`
+- Variables: `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN`, `FRONTEND_URL`, `PORT`
+- Usa una base MySQL cloud y ejecuta `schema.sql`.
+
+## Validación
+
+Checklist mínimo:
+
+- Login correcto genera JWT.
+- Login incorrecto muestra error.
+- Endpoints protegidos rechazan solicitudes sin token.
+- Crear producto aparece en inventario.
+- Bajo stock se marca cuando `stock_actual <= stock_minimo`.
+- Editar producto refleja cambios.
+- Daño leve descuenta stock y crea producto dañado vendible.
+- Merma descuenta stock y registra pérdida.
+- Desactivar producto conserva historial.
