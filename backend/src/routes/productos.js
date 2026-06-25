@@ -104,7 +104,7 @@ router.get('/resumen/dia', async (req, res, next) => {
             THEN (m.stock_nuevo - m.stock_anterior) * (p.precio_venta - p.precio_compra)
             ELSE 0
           END
-        ), 0) AS ganancia_potencial,
+        ), 0) AS margen_potencial,
         COALESCE((
           SELECT SUM(mm.costo_perdida)
           FROM mermas mm
@@ -123,15 +123,15 @@ router.get('/resumen/dia', async (req, res, next) => {
       [req.user.id_usuario, req.user.id_usuario, req.user.id_usuario],
     );
 
-    const gananciaPotencial = Number(resumen?.ganancia_potencial ?? 0);
+    const margenPotencial = Number(resumen?.margen_potencial ?? 0);
     const perdidas = Number(resumen?.perdidas ?? 0);
     const valorDanadoVendible = Number(resumen?.valor_danado_vendible ?? 0);
 
     return res.json({
-      ganancia_potencial: gananciaPotencial,
+      margen_potencial: margenPotencial,
       perdidas,
       valor_danado_vendible: valorDanadoVendible,
-      balance_potencial: gananciaPotencial - perdidas,
+      balance_potencial: margenPotencial - perdidas,
     });
   } catch (error) {
     return next(error);

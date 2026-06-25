@@ -27,7 +27,7 @@ const emptyForm: ProductoForm = {
 };
 
 const emptyResumen: ResumenDia = {
-  ganancia_potencial: 0,
+  margen_potencial: 0,
   perdidas: 0,
   valor_danado_vendible: 0,
   balance_potencial: 0,
@@ -328,7 +328,7 @@ export default function InventarioPage() {
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <section className="grid gap-4 lg:grid-cols-4">
-          <Metric label="Ganancia potencial de hoy" value={formatCurrency(resumenDia.ganancia_potencial)} tone="success" />
+          <Metric label="Margen potencial ingresado hoy" value={formatCurrency(resumenDia.margen_potencial)} tone="success" />
           <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
           <Metric label="Balance potencial" value={formatCurrency(resumenDia.balance_potencial)} tone={resumenDia.balance_potencial < 0 ? 'danger' : 'success'} />
           <Metric label="Daño vendible de hoy" value={formatCurrency(resumenDia.valor_danado_vendible)} tone="warning" />
