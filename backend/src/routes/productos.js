@@ -460,6 +460,60 @@ router.post('/:id/merma', async (req, res, next) => {
   }
 });
 
+router.post('/:id/venta', async (req, res, next) => {
+  const id = Number(req.params.id);
+  const cantidad = toNumber(req.body.cantidad);
+  const precioUnitario = toNumber(req.body.precio_unitario);
+  const nota = String(req.body.nota ?? '').trim();
+
+  if (!Number.isInteger(id) || !Number.isInteger(cantidad) || cantidad <= 0 || (!Number.isNaN(precioUnitario) && precioUnitario < 0)) {
+    return res.status(400).json({ error: 'Producto, cantidad entera y precio unitario valido son requeridos.' });
+  }
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const producto = await obtenerProducto(connection, id, req.user.id_usuario);
+      if (!producto) return { status: 404, error: 'Producto no encontrado.' };
+      if (!producto.activo) return { status: 400, error: 'No se puede vender un producto desactivado.' };
+      if (Number(producto.stock_actual) < cantidad) return { status: 400, error: 'Stock insuficiente para completar la venta.' };
+
+      const stockNuevo = Number(producto.stock_actual) - cantidad;
+      const precioFinal = Number.isNaN(precioUnitario) ? Number(producto.precio_venta) : precioUnitario;
+      const total = cantidad * precioFinal;
+      const motivo = [
+        `Venta registrada por ${cantidad} unidad(es)`,
+        `precio unitario ${precioFinal.toFixed(2)}`,
+        `total ${total.toFixed(2)}`,
+        nota ? `nota: ${nota}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
+        stockNuevo,
+        id,
+        req.user.id_usuario,
+      ]);
+
+      await registrarMovimiento(connection, {
+        id_producto: id,
+        tipo_movimiento: 'venta',
+        cantidad,
+        stock_anterior: Number(producto.stock_actual),
+        stock_nuevo: stockNuevo,
+        motivo,
+      });
+
+      return { producto: await obtenerProducto(connection, id, req.user.id_usuario), total };
+    });
+
+    if (result.error) return res.status(result.status).json({ error: result.error });
+    return res.status(201).json({ producto: mapProducto(result.producto), total: result.total });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/:id/desactivar', async (req, res, next) => {
   const id = Number(req.params.id);
   const motivo = String(req.body.motivo ?? 'Producto desactivado').trim();

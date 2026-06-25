@@ -20,6 +20,7 @@ type InventorySection =
   | 'productos'
   | 'seleccionado'
   | 'registrar'
+  | 'venta'
   | 'dano'
   | 'merma'
   | 'danados'
@@ -57,6 +58,7 @@ export default function InventarioPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
+  const [saleForm, setSaleForm] = useState({ cantidad: '', precio_unitario: '', nota: '' });
   const [activeSection, setActiveSection] = useState<InventorySection>('resumen');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -75,6 +77,13 @@ export default function InventarioPage() {
     () => productos.find((producto) => producto.id_producto === selectedId) ?? null,
     [productos, selectedId],
   );
+  const saleTotal = useMemo(() => {
+    const cantidad = Number(saleForm.cantidad);
+    const precioUnitario = saleForm.precio_unitario === '' ? selectedProduct?.precio_venta : Number(saleForm.precio_unitario);
+
+    if (!Number.isFinite(cantidad) || !Number.isFinite(precioUnitario) || cantidad <= 0) return 0;
+    return cantidad * Number(precioUnitario);
+  }, [saleForm.cantidad, saleForm.precio_unitario, selectedProduct?.precio_venta]);
   const loadProductos = useCallback(async () => {
     setError('');
     setIsLoading(true);
@@ -273,6 +282,38 @@ export default function InventarioPage() {
     }
   }
 
+  async function handleSale(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProduct) return;
+
+    if (!validateQuantityAgainstStock(saleForm.cantidad)) {
+      setError(`La cantidad no puede ser mayor al stock disponible (${selectedProduct.stock_actual}).`);
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      await apiRequest<{ producto: Producto; total: number }>(`/api/productos/${selectedProduct.id_producto}/venta`, {
+        method: 'POST',
+        body: JSON.stringify({
+          cantidad: Number(saleForm.cantidad),
+          precio_unitario: saleForm.precio_unitario === '' ? selectedProduct.precio_venta : Number(saleForm.precio_unitario),
+          nota: saleForm.nota,
+        }),
+      });
+      setSaleForm({ cantidad: '', precio_unitario: '', nota: '' });
+      setStatus('Venta registrada: el stock se descontó automáticamente.');
+      await loadProductos();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo registrar la venta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleDisable(producto: Producto) {
     const confirmed = window.confirm(`¿Seguro que quieres desactivar "${producto.nombre}"? Se conservará su historial.`);
 
@@ -315,6 +356,7 @@ export default function InventarioPage() {
         { id: 'productos', label: 'Productos', description: 'Inventario actual' },
         { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición' },
         { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
+        { id: 'venta', label: 'Vender producto', description: 'Salida por venta' },
       ],
     },
     {
@@ -445,8 +487,8 @@ export default function InventarioPage() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
+                  <QuickAction title="Vender producto" description="Descuenta stock por venta." onClick={() => setActiveSection('venta')} />
                   <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
-                  <QuickAction title="Registrar merma" description="Pérdida total de inventario." onClick={() => setActiveSection('merma')} />
                 </div>
               </section>
 
@@ -576,11 +618,49 @@ export default function InventarioPage() {
               <h2 className="mt-2 text-2xl font-bold text-slate-950">Acciones para este producto</h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
+                <QuickAction title="Vender producto" description="Descontar unidades vendidas." onClick={() => setActiveSection('venta')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
               </div>
             </section>
+          </section>
+        )}
+
+        {activeSection === 'venta' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
+            <SelectedProductCard product={selectedProduct} />
+            <ActionPanel title="Vender producto" description="Registra una venta y descuenta el stock automáticamente.">
+              <form onSubmit={handleSale} className="grid gap-4">
+                <ProductSelect
+                  label="Producto del inventario"
+                  productos={activeProducts}
+                  value={selectedProduct?.activo ? selectedProduct.id_producto : null}
+                  onChange={(value) => {
+                    setSelectedId(value);
+                    const producto = activeProducts.find((item) => item.id_producto === value);
+                    setSaleForm((current) => ({ ...current, precio_unitario: producto ? String(producto.precio_venta) : '' }));
+                  }}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Cantidad vendida" type="number" value={saleForm.cantidad} onChange={(value) => setSaleForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field
+                    label="Precio unitario"
+                    type="number"
+                    value={saleForm.precio_unitario || (selectedProduct ? String(selectedProduct.precio_venta) : '')}
+                    onChange={(value) => setSaleForm((current) => ({ ...current, precio_unitario: value }))}
+                  />
+                </div>
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Total estimado</p>
+                  <p className="mt-1 text-3xl font-black text-slate-950">{formatCurrency(saleTotal)}</p>
+                </div>
+                <Field label="Nota de venta" value={saleForm.nota} onChange={(value) => setSaleForm((current) => ({ ...current, nota: value }))} required={false} />
+                <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-300">
+                  Registrar venta y descontar stock
+                </button>
+              </form>
+            </ActionPanel>
           </section>
         )}
 
@@ -865,11 +945,13 @@ function Field({
   value,
   onChange,
   type = 'text',
+  required = true,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: 'text' | 'number';
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -880,7 +962,7 @@ function Field({
         type={type}
         min={type === 'number' ? '0' : undefined}
         step={type === 'number' ? '0.01' : undefined}
-        required
+        required={required}
         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
       />
     </label>
@@ -1021,6 +1103,7 @@ function formatMovementType(type: string) {
   const labels: Record<string, string> = {
     registro_inicial: 'Registro inicial',
     actualizacion_stock: 'Actualización de stock',
+    venta: 'Venta',
     producto_danado_vendible: 'Producto dañado',
     merma: 'Merma',
     desactivacion: 'Desactivación',
