@@ -15,6 +15,8 @@ type ProductoForm = {
   stock_minimo: string;
 };
 
+type InventoryTab = 'productos' | 'registrar' | 'incidencias' | 'historial';
+
 const emptyForm: ProductoForm = {
   nombre: '',
   categoria: '',
@@ -44,6 +46,7 @@ export default function InventarioPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
+  const [activeTab, setActiveTab] = useState<InventoryTab>('productos');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -112,6 +115,7 @@ export default function InventarioPage() {
   function startEdit(producto: Producto) {
     setEditingId(producto.id_producto);
     setSelectedId(producto.id_producto);
+    setActiveTab('registrar');
     setForm({
       nombre: producto.nombre,
       categoria: producto.categoria,
@@ -127,6 +131,11 @@ export default function InventarioPage() {
   function resetProductForm() {
     setEditingId(null);
     setForm(emptyForm);
+  }
+
+  function selectProduct(producto: Producto) {
+    setSelectedId(producto.id_producto);
+    setActiveTab('incidencias');
   }
 
   function validateQuantityAgainstStock(value: string) {
@@ -261,6 +270,13 @@ export default function InventarioPage() {
     router.replace('/login');
   }
 
+  const tabs: Array<{ id: InventoryTab; label: string; description: string }> = [
+    { id: 'productos', label: 'Inventario', description: 'Consulta productos y filtra por estado.' },
+    { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición de productos.' },
+    { id: 'incidencias', label: 'Daños y mermas', description: 'Descuenta stock por daño leve o pérdida total.' },
+    { id: 'historial', label: 'Historial', description: 'Revisa trazabilidad y registros recientes.' },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -311,8 +327,28 @@ export default function InventarioPage() {
           </section>
         )}
 
-        <section className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_420px]">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <nav className="mt-8 grid gap-3 md:grid-cols-4">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-2xl border p-4 text-left transition ${
+                activeTab === tab.id
+                  ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <span className="block text-sm font-bold">{tab.label}</span>
+              <span className={`mt-1 block text-xs leading-5 ${activeTab === tab.id ? 'text-slate-200' : 'text-slate-500'}`}>
+                {tab.description}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        {activeTab === 'productos' && (
+          <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Productos</p>
@@ -344,6 +380,8 @@ export default function InventarioPage() {
 
             {isLoading ? (
               <p className="p-6 text-sm text-slate-500">Cargando inventario...</p>
+            ) : filteredProducts.length === 0 ? (
+              <p className="p-6 text-sm text-slate-500">No hay productos para este filtro.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[880px] text-left text-sm">
@@ -373,8 +411,8 @@ export default function InventarioPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap gap-2">
-                            <button onClick={() => setSelectedId(producto.id_producto)} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
-                              Seleccionar
+                            <button onClick={() => selectProduct(producto)} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+                              Incidencias
                             </button>
                             <button onClick={() => startEdit(producto)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
                               Editar
@@ -393,23 +431,10 @@ export default function InventarioPage() {
               </div>
             )}
           </section>
+        )}
 
-          <aside className="space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Producto seleccionado</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-950">{selectedProduct?.nombre ?? 'Ninguno'}</h2>
-              {selectedProduct ? (
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <Info label="Categoría" value={selectedProduct.categoria} />
-                  <Info label="Estado" value={selectedProduct.estado} />
-                  <Info label="Stock" value={`${selectedProduct.stock_actual}`} />
-                  <Info label="Mínimo" value={`${selectedProduct.stock_minimo}`} />
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-slate-600">Selecciona un producto para registrar daño o merma.</p>
-              )}
-            </section>
-
+        {activeTab === 'registrar' && (
+          <section className="mt-6 max-w-3xl">
             <ProductFormPanel
               editingId={editingId}
               form={form}
@@ -418,111 +443,134 @@ export default function InventarioPage() {
               onChange={updateForm}
               onSubmit={handleSaveProduct}
             />
+          </section>
+        )}
 
-            <ActionPanel title="Daño leve" description="Descuenta stock y registra unidades vendibles con precio reducido.">
-              <form onSubmit={handleDamage} className="grid gap-4">
-                <ProductSelect
-                  label="Producto del inventario"
-                  productos={activeProducts}
-                  value={selectedProduct?.activo ? selectedProduct.id_producto : null}
-                  onChange={setSelectedId}
-                />
-                <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
-                <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
-                <Field label="Descripción" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
-                <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-400">
-                  Registrar daño leve
-                </button>
-              </form>
-            </ActionPanel>
+        {activeTab === 'incidencias' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <aside className="space-y-6">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Producto seleccionado</p>
+                <h2 className="mt-2 text-2xl font-bold text-slate-950">{selectedProduct?.nombre ?? 'Ninguno'}</h2>
+                {selectedProduct ? (
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <Info label="Categoría" value={selectedProduct.categoria} />
+                    <Info label="Estado" value={selectedProduct.estado} />
+                    <Info label="Stock" value={`${selectedProduct.stock_actual}`} />
+                    <Info label="Mínimo" value={`${selectedProduct.stock_minimo}`} />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-600">Selecciona un producto para registrar daño o merma.</p>
+                )}
+              </section>
 
-            <ActionPanel title="Merma" description="Descuenta stock y registra una pérdida total.">
-              <form onSubmit={handleWaste} className="grid gap-4">
-                <ProductSelect
-                  label="Producto del inventario"
-                  productos={activeProducts}
-                  value={selectedProduct?.activo ? selectedProduct.id_producto : null}
-                  onChange={setSelectedId}
-                />
-                <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
-                <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
-                <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
-                <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
-                  Registrar merma
-                </button>
-              </form>
-            </ActionPanel>
-          </aside>
-        </section>
+              <ActionPanel title="Daño leve" description="Descuenta stock y registra unidades vendibles con precio reducido.">
+                <form onSubmit={handleDamage} className="grid gap-4">
+                  <ProductSelect
+                    label="Producto del inventario"
+                    productos={activeProducts}
+                    value={selectedProduct?.activo ? selectedProduct.id_producto : null}
+                    onChange={setSelectedId}
+                  />
+                  <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
+                  <Field label="Descripción" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
+                  <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-400">
+                    Registrar daño leve
+                  </button>
+                </form>
+              </ActionPanel>
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-2">
-          <DataTablePanel
-            title="Productos dañados vendibles"
-            eyebrow="Daño leve"
-            emptyText="Aún no hay productos dañados vendibles."
-            hasRows={productosDanados.length > 0}
-          >
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
-                <tr>
-                  <th className="px-5 py-4">Producto original</th>
-                  <th className="px-5 py-4">Cantidad</th>
-                  <th className="px-5 py-4">Precio reducido</th>
-                  <th className="px-5 py-4">Descripción</th>
-                  <th className="px-5 py-4">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {productosDanados.map((item) => (
-                  <tr key={item.id_producto_danado}>
-                    <td className="px-5 py-4 font-semibold text-slate-950">{item.producto}</td>
-                    <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
-                    <td className="px-5 py-4 text-slate-600">{formatCurrency(item.precio_reducido)}</td>
-                    <td className="max-w-xs px-5 py-4 text-slate-600">{item.descripcion_dano}</td>
-                    <td className="px-5 py-4">
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {item.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </DataTablePanel>
+              <ActionPanel title="Merma" description="Descuenta stock y registra una pérdida total.">
+                <form onSubmit={handleWaste} className="grid gap-4">
+                  <ProductSelect
+                    label="Producto del inventario"
+                    productos={activeProducts}
+                    value={selectedProduct?.activo ? selectedProduct.id_producto : null}
+                    onChange={setSelectedId}
+                  />
+                  <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
+                  <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
+                  <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
+                    Registrar merma
+                  </button>
+                </form>
+              </ActionPanel>
+            </aside>
 
-          <DataTablePanel
-            title="Pérdidas / mermas"
-            eyebrow="Daño severo"
-            emptyText="Aún no hay mermas registradas."
-            hasRows={mermas.length > 0}
-          >
-            <table className="w-full min-w-[650px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
-                <tr>
-                  <th className="px-5 py-4">Producto</th>
-                  <th className="px-5 py-4">Cantidad</th>
-                  <th className="px-5 py-4">Motivo</th>
-                  <th className="px-5 py-4">Costo pérdida</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {mermas.map((item) => (
-                  <tr key={item.id_merma}>
-                    <td className="px-5 py-4 font-semibold text-slate-950">{item.producto}</td>
-                    <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
-                    <td className="max-w-xs px-5 py-4 text-slate-600">{item.motivo}</td>
-                    <td className="px-5 py-4 text-slate-600">{formatCurrency(item.costo_perdida)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </DataTablePanel>
-        </section>
+            <div className="grid gap-6">
+              <DataTablePanel
+                title="Productos dañados vendibles"
+                eyebrow="Daño leve"
+                emptyText="Aún no hay productos dañados vendibles."
+                hasRows={productosDanados.length > 0}
+              >
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">Producto original</th>
+                      <th className="px-5 py-4">Cantidad</th>
+                      <th className="px-5 py-4">Precio reducido</th>
+                      <th className="px-5 py-4">Descripción</th>
+                      <th className="px-5 py-4">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {productosDanados.map((item) => (
+                      <tr key={item.id_producto_danado}>
+                        <td className="px-5 py-4 font-semibold text-slate-950">{item.producto}</td>
+                        <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
+                        <td className="px-5 py-4 text-slate-600">{formatCurrency(item.precio_reducido)}</td>
+                        <td className="max-w-xs px-5 py-4 text-slate-600">{item.descripcion_dano}</td>
+                        <td className="px-5 py-4">
+                          <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                            {item.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataTablePanel>
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <TracePanel title="Historial del producto" subtitle={selectedProduct?.nombre ?? 'Selecciona un producto'} rows={selectedMovements} />
-          <TracePanel title="Historial reciente" subtitle="Últimos 12 movimientos registrados" rows={movimientos} />
-        </section>
+              <DataTablePanel
+                title="Pérdidas / mermas"
+                eyebrow="Daño severo"
+                emptyText="Aún no hay mermas registradas."
+                hasRows={mermas.length > 0}
+              >
+                <table className="w-full min-w-[650px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">Producto</th>
+                      <th className="px-5 py-4">Cantidad</th>
+                      <th className="px-5 py-4">Motivo</th>
+                      <th className="px-5 py-4">Costo pérdida</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {mermas.map((item) => (
+                      <tr key={item.id_merma}>
+                        <td className="px-5 py-4 font-semibold text-slate-950">{item.producto}</td>
+                        <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
+                        <td className="max-w-xs px-5 py-4 text-slate-600">{item.motivo}</td>
+                        <td className="px-5 py-4 text-slate-600">{formatCurrency(item.costo_perdida)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </DataTablePanel>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'historial' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+            <TracePanel title="Historial del producto" subtitle={selectedProduct?.nombre ?? 'Selecciona un producto'} rows={selectedMovements} />
+            <TracePanel title="Historial reciente" subtitle="Últimos 12 movimientos registrados" rows={movimientos} />
+          </section>
+        )}
       </div>
     </main>
   );
