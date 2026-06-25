@@ -37,6 +37,7 @@ export default function InventarioPage() {
   const router = useRouter();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoInventario[]>([]);
+  const [productMovements, setProductMovements] = useState<MovimientoInventario[]>([]);
   const [productosDanados, setProductosDanados] = useState<ProductoDanado[]>([]);
   const [mermas, setMermas] = useState<Merma[]>([]);
   const [resumenDia, setResumenDia] = useState<ResumenDia>(emptyResumen);
@@ -64,11 +65,6 @@ export default function InventarioPage() {
     () => productos.find((producto) => producto.id_producto === selectedId) ?? null,
     [productos, selectedId],
   );
-  const selectedMovements = useMemo(
-    () => movimientos.filter((movimiento) => movimiento.id_producto === selectedProduct?.id_producto),
-    [movimientos, selectedProduct],
-  );
-
   const loadProductos = useCallback(async () => {
     setError('');
     setIsLoading(true);
@@ -107,6 +103,31 @@ export default function InventarioPage() {
 
     loadProductos();
   }, [loadProductos, router]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setProductMovements([]);
+      return;
+    }
+
+    let ignore = false;
+
+    async function loadProductMovements() {
+      try {
+        const data = await apiRequest<MovimientoInventario[]>(`/api/productos/${selectedId}/movimientos`);
+        if (!ignore) setProductMovements(data);
+      } catch (requestError) {
+        const message = requestError instanceof Error ? requestError.message : 'No se pudo cargar el historial del producto.';
+        if (!ignore) setError(message);
+      }
+    }
+
+    loadProductMovements();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedId]);
 
   function updateForm(field: keyof ProductoForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -567,7 +588,7 @@ export default function InventarioPage() {
 
         {activeTab === 'historial' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-            <TracePanel title="Historial del producto" subtitle={selectedProduct?.nombre ?? 'Selecciona un producto'} rows={selectedMovements} />
+            <TracePanel title="Historial del producto" subtitle={selectedProduct?.nombre ?? 'Selecciona un producto'} rows={productMovements} />
             <TracePanel title="Historial reciente" subtitle="Últimos 12 movimientos registrados" rows={movimientos} />
           </section>
         )}

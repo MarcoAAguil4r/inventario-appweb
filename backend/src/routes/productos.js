@@ -172,6 +172,43 @@ router.get('/movimientos/recientes', async (req, res, next) => {
   }
 });
 
+router.get('/:id/movimientos', async (req, res, next) => {
+  const id = Number(req.params.id);
+
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
+
+  try {
+    const movimientos = await query(
+      `SELECT
+        m.id_movimiento,
+        m.id_producto,
+        p.nombre AS producto,
+        m.tipo_movimiento,
+        m.cantidad,
+        m.stock_anterior,
+        m.stock_nuevo,
+        m.motivo,
+        m.fecha
+      FROM movimientos_inventario m
+      INNER JOIN productos p ON p.id_producto = m.id_producto
+      WHERE p.id_usuario = ? AND m.id_producto = ?
+      ORDER BY m.fecha DESC, m.id_movimiento DESC`,
+      [req.user.id_usuario, id],
+    );
+
+    return res.json(
+      movimientos.map((movimiento) => ({
+        ...movimiento,
+        cantidad: Number(movimiento.cantidad),
+        stock_anterior: Number(movimiento.stock_anterior),
+        stock_nuevo: Number(movimiento.stock_nuevo),
+      })),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/danados-vendibles', async (req, res, next) => {
   try {
     const danados = await query(
