@@ -129,6 +129,7 @@ router.get('/resumen/dia', async (req, res, next) => {
 
     return res.json({
       margen_potencial: margenPotencial,
+      ganancia_potencial: margenPotencial,
       perdidas,
       valor_danado_vendible: valorDanadoVendible,
       balance_potencial: margenPotencial - perdidas,

@@ -301,25 +301,25 @@ export default function InventarioPage() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+      <header className="bg-slate-950 text-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pb-14 pt-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-600">Inventario</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Gestión de inventario</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-300">Inventario</p>
+            <h1 className="mt-3 text-4xl font-bold tracking-tight text-white">Gestión de inventario</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
               Control diario de productos, stock mínimo, daños, mermas y trazabilidad.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={loadProductos}
-              className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-sky-100"
             >
               Actualizar
             </button>
             <button
               onClick={logout}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/15"
             >
               Cerrar sesión
             </button>
@@ -327,24 +327,24 @@ export default function InventarioPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto -mt-8 max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
         {(error || status) && (
-          <section className="mt-6 space-y-3">
+          <section className="mb-4 space-y-3">
             {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
             {status && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{status}</p>}
           </section>
         )}
 
-        <nav className="mt-8 grid gap-3 md:grid-cols-5">
+        <nav className="grid gap-2 rounded-3xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-950/10 md:grid-cols-5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-2xl border p-4 text-left transition ${
+              className={`rounded-2xl p-4 text-left transition ${
                 activeTab === tab.id
-                  ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                  ? 'bg-slate-950 text-white shadow-lg shadow-slate-950/20'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
               }`}
             >
               <span className="block text-sm font-bold">{tab.label}</span>
@@ -356,7 +356,7 @@ export default function InventarioPage() {
         </nav>
 
         {activeTab === 'resumen' && (
-          <section className="mt-6 space-y-4">
+          <section className="mt-6 space-y-5">
             <section className="grid gap-4 lg:grid-cols-4">
               <Metric label="Margen potencial ingresado hoy" value={formatCurrency(resumenDia.margen_potencial)} tone="success" />
               <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
@@ -374,7 +374,7 @@ export default function InventarioPage() {
         )}
 
         {activeTab === 'productos' && (
-          <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Productos</p>
@@ -618,7 +618,7 @@ function ProductFormPanel({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <form onSubmit={onSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <form onSubmit={onSubmit} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
@@ -657,39 +657,39 @@ function ProductFormPanel({
 }
 
 function Metric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warning' | 'danger' | 'success' }) {
-  const toneClass = {
-    default: 'text-slate-950',
-    warning: 'text-amber-600',
-    danger: 'text-red-600',
-    success: 'text-emerald-600',
+  const styles = {
+    default: 'border-slate-200 bg-white text-slate-950',
+    warning: 'border-amber-200 bg-amber-50 text-amber-700',
+    danger: 'border-red-200 bg-red-50 text-red-700',
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold text-slate-500">{label}</p>
-      <p className={`mt-3 text-3xl font-bold ${toneClass}`}>{value}</p>
+    <div className={`rounded-3xl border p-6 shadow-lg shadow-slate-950/5 ${styles}`}>
+      <p className="text-sm font-bold text-slate-600">{label}</p>
+      <p className="mt-4 text-4xl font-black tracking-tight">{value}</p>
     </div>
   );
 }
 
 function MiniMetric({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'warning' | 'danger' }) {
   const toneClass = {
-    default: 'text-slate-950',
-    warning: 'text-amber-600',
-    danger: 'text-red-600',
+    default: 'border-slate-200 text-slate-950',
+    warning: 'border-amber-200 text-amber-700',
+    danger: 'border-red-200 text-red-700',
   }[tone];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className={`rounded-2xl border bg-white px-5 py-4 shadow-sm ${toneClass}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${toneClass}`}>{value}</p>
+      <p className="mt-2 text-3xl font-black">{value}</p>
     </div>
   );
 }
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3">
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className="mt-1 font-semibold capitalize text-slate-900">{value}</p>
     </div>
@@ -771,7 +771,7 @@ function StatusBadge({ estado }: { estado: Producto['estado'] }) {
 
 function ActionPanel({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
       <div className="mb-5">
         <h2 className="text-xl font-bold text-slate-950">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
@@ -795,7 +795,7 @@ function DataTablePanel({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
       <div className="border-b border-slate-200 p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{eyebrow}</p>
         <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
@@ -809,7 +809,7 @@ function DataTablePanel({
 
 function TracePanel({ title, subtitle, rows }: { title: string; subtitle: string; rows: MovimientoInventario[] }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
       <div className="border-b border-slate-200 p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Trazabilidad</p>
         <h2 className="mt-2 text-2xl font-bold text-slate-950">{title}</h2>
@@ -873,8 +873,10 @@ function formatDate(value: string) {
 }
 
 function formatCurrency(value: number) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+
   return new Intl.NumberFormat('es-MX', {
     style: 'currency',
     currency: 'MXN',
-  }).format(value);
+  }).format(safeValue);
 }
