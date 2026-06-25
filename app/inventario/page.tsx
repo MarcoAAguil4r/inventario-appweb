@@ -15,7 +15,7 @@ type ProductoForm = {
   stock_minimo: string;
 };
 
-type InventoryTab = 'productos' | 'registrar' | 'incidencias' | 'historial';
+type InventoryTab = 'resumen' | 'productos' | 'registrar' | 'incidencias' | 'historial';
 
 const emptyForm: ProductoForm = {
   nombre: '',
@@ -47,7 +47,7 @@ export default function InventarioPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
-  const [activeTab, setActiveTab] = useState<InventoryTab>('productos');
+  const [activeTab, setActiveTab] = useState<InventoryTab>('resumen');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -292,6 +292,7 @@ export default function InventarioPage() {
   }
 
   const tabs: Array<{ id: InventoryTab; label: string; description: string }> = [
+    { id: 'resumen', label: 'Resumen', description: 'Indicadores diarios y estado general.' },
     { id: 'productos', label: 'Inventario', description: 'Consulta productos y filtra por estado.' },
     { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición de productos.' },
     { id: 'incidencias', label: 'Daños y mermas', description: 'Descuenta stock por daño leve o pérdida total.' },
@@ -327,20 +328,6 @@ export default function InventarioPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <section className="grid gap-4 lg:grid-cols-4">
-          <Metric label="Margen potencial ingresado hoy" value={formatCurrency(resumenDia.margen_potencial)} tone="success" />
-          <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
-          <Metric label="Balance potencial" value={formatCurrency(resumenDia.balance_potencial)} tone={resumenDia.balance_potencial < 0 ? 'danger' : 'success'} />
-          <Metric label="Daño vendible de hoy" value={formatCurrency(resumenDia.valor_danado_vendible)} tone="warning" />
-        </section>
-
-        <section className="mt-4 grid gap-4 md:grid-cols-4">
-          <MiniMetric label="Activos" value={activeProducts.length} />
-          <MiniMetric label="Bajo stock" value={lowStockCount} tone="warning" />
-          <MiniMetric label="Agotados" value={exhaustedCount} tone="danger" />
-          <MiniMetric label="Desactivados" value={disabledCount} />
-        </section>
-
         {(error || status) && (
           <section className="mt-6 space-y-3">
             {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
@@ -348,7 +335,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        <nav className="mt-8 grid gap-3 md:grid-cols-4">
+        <nav className="mt-8 grid gap-3 md:grid-cols-5">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -367,6 +354,24 @@ export default function InventarioPage() {
             </button>
           ))}
         </nav>
+
+        {activeTab === 'resumen' && (
+          <section className="mt-6 space-y-4">
+            <section className="grid gap-4 lg:grid-cols-4">
+              <Metric label="Margen potencial ingresado hoy" value={formatCurrency(resumenDia.margen_potencial)} tone="success" />
+              <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
+              <Metric label="Balance potencial" value={formatCurrency(resumenDia.balance_potencial)} tone={resumenDia.balance_potencial < 0 ? 'danger' : 'success'} />
+              <Metric label="Daño vendible de hoy" value={formatCurrency(resumenDia.valor_danado_vendible)} tone="warning" />
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-4">
+              <MiniMetric label="Activos" value={activeProducts.length} />
+              <MiniMetric label="Bajo stock" value={lowStockCount} tone="warning" />
+              <MiniMetric label="Agotados" value={exhaustedCount} tone="danger" />
+              <MiniMetric label="Desactivados" value={disabledCount} />
+            </section>
+          </section>
+        )}
 
         {activeTab === 'productos' && (
           <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
