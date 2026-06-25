@@ -301,66 +301,92 @@ export default function InventarioPage() {
     router.replace('/login');
   }
 
-  const menuItems: Array<{ id: InventorySection; label: string; description: string }> = [
-    { id: 'resumen', label: 'Vista general', description: 'Indicadores diarios' },
-    { id: 'productos', label: 'Productos', description: 'Inventario actual' },
-    { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle activo' },
-    { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar', description: 'Alta y edición' },
-    { id: 'dano', label: 'Daño leve', description: 'Stock vendible reducido' },
-    { id: 'merma', label: 'Merma', description: 'Pérdida total' },
-    { id: 'danados', label: 'Productos dañados vendibles', description: 'Unidades recuperables' },
-    { id: 'mermas', label: 'Pérdidas / mermas', description: 'Registro de pérdidas' },
-    { id: 'historial-producto', label: 'Historial del producto', description: 'Trazabilidad individual' },
-    { id: 'historial-reciente', label: 'Historial reciente', description: 'Últimos movimientos' },
+  const menuGroups: Array<{
+    title: string;
+    items: Array<{ id: InventorySection; label: string; description: string }>;
+  }> = [
+    {
+      title: 'Panel',
+      items: [{ id: 'resumen', label: 'Vista general', description: 'Resumen y acciones rápidas' }],
+    },
+    {
+      title: 'Catálogo',
+      items: [
+        { id: 'productos', label: 'Productos', description: 'Inventario actual' },
+        { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición' },
+        { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
+      ],
+    },
+    {
+      title: 'Movimientos',
+      items: [
+        { id: 'dano', label: 'Daño leve', description: 'Stock vendible reducido' },
+        { id: 'merma', label: 'Merma', description: 'Pérdida total' },
+      ],
+    },
+    {
+      title: 'Reportes',
+      items: [
+        { id: 'danados', label: 'Daños vendibles', description: 'Unidades recuperables' },
+        { id: 'mermas', label: 'Pérdidas / mermas', description: 'Registro de pérdidas' },
+      ],
+    },
+    {
+      title: 'Historial',
+      items: [
+        { id: 'historial-producto', label: 'Por producto', description: 'Trazabilidad individual' },
+        { id: 'historial-reciente', label: 'Reciente', description: 'Últimos movimientos' },
+      ],
+    },
   ];
+  const menuItems = menuGroups.flatMap((group) => group.items);
   const activeMenuItem = menuItems.find((item) => item.id === activeSection) ?? menuItems[0];
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
       <div className="grid min-h-screen lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="border-r border-slate-200 bg-white px-5 py-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500 text-lg font-black text-white">R</div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-2xl font-black tracking-tight text-slate-950">ReStock</p>
-                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">SaaS</span>
-              </div>
-              <p className="text-sm text-slate-500">Inventario inteligente para tu negocio</p>
-            </div>
+        <aside className="border-r border-slate-800 bg-slate-950 px-5 py-6 text-white shadow-xl shadow-slate-950/20">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-sky-300">Inventario</p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-white">Panel operativo</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">Control diario de stock, daños, mermas y trazabilidad.</p>
           </div>
 
-          <div className="mt-8">
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Módulos</p>
-            <nav className="space-y-2">
-              {menuItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveSection(item.id)}
-                  className={`w-full rounded-2xl px-4 py-3 text-left transition ${
-                    activeSection === item.id
-                      ? 'bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-100'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
-                  }`}
-                >
-                  <span className="block text-sm font-extrabold">{item.label}</span>
-                  <span className={`mt-1 block text-xs ${activeSection === item.id ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {item.description}
-                  </span>
-                </button>
-              ))}
-            </nav>
-          </div>
+          <nav className="mt-8 space-y-6">
+            {menuGroups.map((group) => (
+              <section key={group.title}>
+                <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
+                <div className="space-y-1.5">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setActiveSection(item.id)}
+                      className={`w-full rounded-xl px-3.5 py-3 text-left transition ${
+                        activeSection === item.id
+                          ? 'bg-sky-400 text-slate-950 shadow-lg shadow-sky-500/20'
+                          : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <span className="block text-sm font-extrabold">{item.label}</span>
+                      <span className={`mt-0.5 block text-xs ${activeSection === item.id ? 'text-slate-800' : 'text-slate-500'}`}>
+                        {item.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </nav>
 
-          <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Sesión</p>
-            <p className="mt-2 text-sm font-semibold text-slate-700">Panel de inventario</p>
+          <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Sesión</p>
+            <p className="mt-2 text-sm font-semibold text-slate-200">Panel de inventario</p>
             <div className="mt-4 grid gap-2">
-              <button onClick={loadProductos} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">
+              <button onClick={loadProductos} className="rounded-xl bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-sky-300">
                 Actualizar
               </button>
-              <button onClick={logout} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100">
+              <button onClick={logout} className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10">
                 Cerrar sesión
               </button>
             </div>
@@ -371,12 +397,12 @@ export default function InventarioPage() {
           <header className="border-b border-slate-200 bg-white px-5 py-6 sm:px-8">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-600">Inventario</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-sky-500">Inventario</p>
                 <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{activeMenuItem.label}</h1>
                 <p className="mt-1 text-sm text-slate-500">{activeMenuItem.description}</p>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Administrador
+              <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700">
+                <span className="h-2 w-2 rounded-full bg-sky-500" /> Administrador
               </div>
             </div>
           </header>
@@ -385,7 +411,7 @@ export default function InventarioPage() {
             {(error || status) && (
               <section className="mb-4 space-y-3">
                 {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
-                {status && <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{status}</p>}
+                {status && <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700">{status}</p>}
               </section>
             )}
 
@@ -404,6 +430,32 @@ export default function InventarioPage() {
               <MiniMetric label="Agotados" value={exhaustedCount} tone="danger" />
               <MiniMetric label="Desactivados" value={disabledCount} />
             </section>
+
+            <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Acciones rápidas</p>
+                    <h2 className="mt-2 text-2xl font-bold text-slate-950">Qué quieres hacer ahora</h2>
+                  </div>
+                  <button onClick={loadProductos} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                    Actualizar datos
+                  </button>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
+                  <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
+                  <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
+                  <QuickAction title="Registrar merma" description="Pérdida total de inventario." onClick={() => setActiveSection('merma')} />
+                </div>
+              </section>
+
+              <SelectedProductCard product={selectedProduct}>
+                <button onClick={() => setActiveSection('productos')} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800">
+                  Cambiar producto
+                </button>
+              </SelectedProductCard>
+            </section>
           </section>
         )}
 
@@ -415,26 +467,31 @@ export default function InventarioPage() {
                 <h2 className="mt-2 text-2xl font-bold text-slate-950">Inventario actual</h2>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {[
-                  ['todos', 'Todos'],
-                  ['bajo stock', 'Bajo stock'],
-                  ['agotado', 'Agotados'],
-                  ['desactivado', 'Desactivados'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setStatusFilter(value as typeof statusFilter)}
-                    className={`rounded-full px-4 py-2 text-xs font-bold transition ${
-                      statusFilter === value
-                        ? 'bg-slate-950 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-3 sm:items-end">
+                <button onClick={() => setActiveSection('registrar')} className="rounded-xl bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-sky-300">
+                  Nuevo producto
+                </button>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ['todos', 'Todos'],
+                    ['bajo stock', 'Bajo stock'],
+                    ['agotado', 'Agotados'],
+                    ['desactivado', 'Desactivados'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setStatusFilter(value as typeof statusFilter)}
+                      className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                        statusFilter === value
+                          ? 'bg-slate-950 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -507,25 +564,30 @@ export default function InventarioPage() {
         )}
 
         {activeSection === 'seleccionado' && (
-          <section className="mt-6 max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Producto seleccionado</p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-950">{selectedProduct?.nombre ?? 'Ninguno'}</h2>
-            {selectedProduct ? (
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <Info label="Categoría" value={selectedProduct.categoria} />
-                <Info label="Estado" value={selectedProduct.estado} />
-                <Info label="Stock" value={`${selectedProduct.stock_actual}`} />
-                <Info label="Mínimo" value={`${selectedProduct.stock_minimo}`} />
+          <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <SelectedProductCard product={selectedProduct}>
+              <button onClick={() => setActiveSection('productos')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                Elegir otro
+              </button>
+            </SelectedProductCard>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Operaciones</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">Acciones para este producto</h2>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
+                <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
+                <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
+                <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
               </div>
-            ) : (
-              <p className="mt-3 text-sm text-slate-600">Selecciona un producto desde la sección Productos.</p>
-            )}
+            </section>
           </section>
         )}
 
         {activeSection === 'dano' && (
-          <section className="mt-6 max-w-xl">
-            <ActionPanel title="Daño leve" description="Descuenta stock y registra unidades vendibles con precio reducido.">
+          <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
+            <SelectedProductCard product={selectedProduct} />
+            <ActionPanel title="Daño leve" description="Usa esta opción cuando el producto todavía puede venderse con precio reducido.">
               <form onSubmit={handleDamage} className="grid gap-4">
                 <ProductSelect
                   label="Producto del inventario"
@@ -533,9 +595,11 @@ export default function InventarioPage() {
                   value={selectedProduct?.activo ? selectedProduct.id_producto : null}
                   onChange={setSelectedId}
                 />
-                <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
-                <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
-                <Field label="Descripción" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
+                </div>
+                <Field label="Descripción del daño" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
                 <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-slate-400">
                   Registrar daño leve
                 </button>
@@ -545,8 +609,9 @@ export default function InventarioPage() {
         )}
 
         {activeSection === 'merma' && (
-          <section className="mt-6 max-w-xl">
-            <ActionPanel title="Merma" description="Descuenta stock y registra una pérdida total.">
+          <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
+            <SelectedProductCard product={selectedProduct} />
+            <ActionPanel title="Merma" description="Usa esta opción cuando el producto ya no puede venderse y debe salir del inventario.">
               <form onSubmit={handleWaste} className="grid gap-4">
                 <ProductSelect
                   label="Producto del inventario"
@@ -554,8 +619,10 @@ export default function InventarioPage() {
                   value={selectedProduct?.activo ? selectedProduct.id_producto : null}
                   onChange={setSelectedId}
                 />
-                <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
-                <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
+                </div>
                 <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
                 <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
                   Registrar merma
@@ -591,7 +658,7 @@ export default function InventarioPage() {
                       <td className="px-5 py-4 text-slate-600">{formatCurrency(item.precio_reducido)}</td>
                       <td className="max-w-xs px-5 py-4 text-slate-600">{item.descripcion_dano}</td>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.activo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${item.activo ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>
                           {item.activo ? 'Activo' : 'Inactivo'}
                         </span>
                       </td>
@@ -707,12 +774,58 @@ function ProductFormPanel({
   );
 }
 
+function QuickAction({
+  title,
+  description,
+  onClick,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-sky-200 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="block text-sm font-black text-slate-950">{title}</span>
+      <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
+    </button>
+  );
+}
+
+function SelectedProductCard({ product, children }: { product: Producto | null; children?: ReactNode }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Producto seleccionado</p>
+      <h2 className="mt-2 text-2xl font-bold text-slate-950">{product?.nombre ?? 'Ninguno seleccionado'}</h2>
+      {product ? (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <Info label="Categoría" value={product.categoria} />
+            <Info label="Estado" value={product.estado} />
+            <Info label="Stock" value={`${product.stock_actual}`} />
+            <Info label="Mínimo" value={`${product.stock_minimo}`} />
+          </div>
+          {children && <div className="mt-5 flex flex-wrap gap-2">{children}</div>}
+        </>
+      ) : (
+        <p className="mt-3 text-sm leading-6 text-slate-600">Selecciona un producto desde el catálogo para habilitar operaciones.</p>
+      )}
+    </section>
+  );
+}
+
 function Metric({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'warning' | 'danger' | 'success' }) {
   const styles = {
     default: 'border-slate-200 bg-white text-slate-950',
     warning: 'border-amber-200 bg-amber-50 text-amber-700',
     danger: 'border-red-200 bg-red-50 text-red-700',
-    success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    success: 'border-sky-200 bg-sky-50 text-sky-700',
   }[tone];
 
   return (
@@ -807,7 +920,7 @@ function ProductSelect({
 
 function StatusBadge({ estado }: { estado: Producto['estado'] }) {
   const styles = {
-    disponible: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    disponible: 'bg-sky-50 text-sky-700 border-sky-200',
     'bajo stock': 'bg-amber-50 text-amber-700 border-amber-200',
     agotado: 'bg-red-50 text-red-700 border-red-200',
     desactivado: 'bg-slate-100 text-slate-600 border-slate-200',
