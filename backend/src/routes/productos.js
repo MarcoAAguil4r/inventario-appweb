@@ -100,6 +100,15 @@ router.get('/resumen/dia', async (req, res, next) => {
       `SELECT
         COALESCE(SUM(
           CASE
+            WHEN m.tipo_movimiento = 'venta' AND m.motivo LIKE '%total %'
+            THEN CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(m.motivo, 'total ', -1), ' |', 1) AS DECIMAL(10, 2))
+            WHEN m.tipo_movimiento = 'venta'
+            THEN m.cantidad * p.precio_venta
+            ELSE 0
+          END
+        ), 0) AS ventas_dia,
+        COALESCE(SUM(
+          CASE
             WHEN m.stock_nuevo > m.stock_anterior
             THEN (m.stock_nuevo - m.stock_anterior) * (p.precio_venta - p.precio_compra)
             ELSE 0
@@ -124,15 +133,17 @@ router.get('/resumen/dia', async (req, res, next) => {
     );
 
     const margenPotencial = Number(resumen?.margen_potencial ?? 0);
+    const ventasDia = Number(resumen?.ventas_dia ?? 0);
     const perdidas = Number(resumen?.perdidas ?? 0);
     const valorDanadoVendible = Number(resumen?.valor_danado_vendible ?? 0);
 
     return res.json({
       margen_potencial: margenPotencial,
       ganancia_potencial: margenPotencial,
+      ventas_dia: ventasDia,
       perdidas,
       valor_danado_vendible: valorDanadoVendible,
-      balance_potencial: margenPotencial - perdidas,
+      balance_potencial: ventasDia - perdidas,
     });
   } catch (error) {
     return next(error);

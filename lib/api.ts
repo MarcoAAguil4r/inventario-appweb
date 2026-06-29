@@ -58,6 +58,7 @@ export type Merma = {
 
 export type ResumenDia = {
   margen_potencial: number;
+  ventas_dia: number;
   perdidas: number;
   valor_danado_vendible: number;
   balance_potencial: number;
