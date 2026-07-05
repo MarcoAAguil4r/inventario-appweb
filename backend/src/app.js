@@ -3,6 +3,7 @@ import cors from 'cors';
 import './env.js';
 import authRoutes from './routes/auth.js';
 import productosRoutes from './routes/productos.js';
+import alertasRoutes from './routes/alertas.js';
 
 const app = express();
 const corsOrigin = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:3000';
@@ -20,6 +21,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/productos', productosRoutes);
+app.use('/api/alertas', alertasRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });

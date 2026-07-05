@@ -8,8 +8,23 @@ CREATE TABLE IF NOT EXISTS usuarios (
   creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id_reset INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL DEFAULT NULL,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_password_reset_usuario (id_usuario),
+  INDEX idx_password_reset_token_hash (token_hash),
+  CONSTRAINT fk_password_reset_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+    ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS productos (
   id_producto INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
   nombre VARCHAR(160) NOT NULL,
   categoria VARCHAR(120) NOT NULL,
   precio_compra DECIMAL(10, 2) NOT NULL DEFAULT 0,
@@ -18,7 +33,10 @@ CREATE TABLE IF NOT EXISTS productos (
   stock_minimo INT NOT NULL DEFAULT 0,
   activo BOOLEAN NOT NULL DEFAULT TRUE,
   creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_productos_usuario (id_usuario),
+  CONSTRAINT fk_productos_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 );
 
 CREATE TABLE IF NOT EXISTS productos_danados (
