@@ -1,0 +1,119 @@
+'use client';
+
+import type { FormEvent } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { apiRequest } from '@/lib/api';
+
+type ResetPasswordResponse = {
+  ok: boolean;
+  message: string;
+};
+
+export default function ResetPasswordPage() {
+  const router = useRouter();
+  const [token, setToken] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setToken(params.get('token') ?? '');
+  }, []);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const data = await apiRequest<ResetPasswordResponse>('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, password, confirmPassword }),
+      });
+
+      setMessage(data.message);
+      window.setTimeout(() => router.push('/login'), 1800);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar la contraseña.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-100 px-4 py-10 text-slate-950">
+      <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl items-center justify-center">
+        <div className="w-full rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10 sm:p-12">
+          <Link href="/login" className="text-sm font-bold text-slate-600 hover:text-sky-700">
+            Volver al login
+          </Link>
+
+          <div className="mt-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Nueva contraseña</p>
+            <h1 className="mt-3 text-3xl font-bold text-slate-950">Crear contraseña segura</h1>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              El enlace solo funciona una vez y expira en 30 minutos.
+            </p>
+          </div>
+
+          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+            {!token && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                El enlace no incluye un token valido.
+              </p>
+            )}
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Nueva contraseña</span>
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                required
+                minLength={8}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                placeholder="Minimo 8 caracteres"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Confirmar contraseña</span>
+              <input
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                type="password"
+                required
+                minLength={8}
+                className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                placeholder="Repite la contraseña"
+              />
+            </label>
+
+            {message && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{message}</p>}
+            {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isLoading || !token}
+              className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-500"
+            >
+              {isLoading ? 'Actualizando...' : 'Actualizar contraseña'}
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}

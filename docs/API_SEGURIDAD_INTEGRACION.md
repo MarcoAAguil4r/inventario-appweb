@@ -9,6 +9,8 @@ Base local: `http://localhost:4000`
 | GET | `/api/health` | No | Estado del backend |
 | POST | `/api/auth/register` | No | Registra usuario y devuelve JWT |
 | POST | `/api/auth/login` | No | Autentica usuario y devuelve JWT |
+| POST | `/api/auth/forgot-password` | No | Solicita recuperacion de contrasena con respuesta neutra |
+| POST | `/api/auth/reset-password` | No | Cambia la contrasena con token valido de un solo uso |
 | GET | `/api/productos` | Bearer JWT | Lista productos del usuario |
 | POST | `/api/productos` | Bearer JWT | Crea producto |
 | PUT | `/api/productos/:id` | Bearer JWT | Actualiza producto |
@@ -32,6 +34,7 @@ EMAIL_PROVIDER="mock"
 RESEND_API_KEY="re_..."
 EMAIL_FROM="Inventario <onboarding@resend.dev>"
 ALERT_EMAIL_TO="destino@example.com"
+RESET_PASSWORD_URL="http://localhost:3000/reset-password"
 ```
 
 Modo `mock`: no usa red y devuelve una respuesta controlada para evidencia local.
@@ -43,6 +46,8 @@ Modo `resend`: envia `POST https://api.resend.com/emails` con `Authorization: Be
 - Autenticacion con JWT en `POST /api/auth/login` y `POST /api/auth/register`.
 - Proteccion de rutas con middleware `requireAuth` en productos y alertas.
 - Passwords hasheados con bcrypt.
+- Recuperacion de contrasena con token aleatorio, guardado como hash SHA-256, expiracion de 30 minutos y un solo uso.
+- Respuesta neutra en `forgot-password` para no revelar si un correo existe.
 - Validacion de datos en auth, productos, ventas, mermas y alertas.
 - Manejo centralizado de errores en `backend/src/app.js`.
 - Variables de entorno en `backend/.env.example`.
@@ -87,7 +92,55 @@ Response esperado:
 }
 ```
 
-### 2. Request/response de API propia
+### 2. Recuperacion de contrasena segura
+
+Solicitar recuperacion:
+
+```bash
+curl -X POST http://localhost:4000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d "{\"correo\":\"admin@example.com\"}"
+```
+
+Response esperado:
+
+```json
+{
+  "ok": true,
+  "message": "Si el correo existe, enviaremos instrucciones para recuperar la contrasena."
+}
+```
+
+La misma respuesta debe aparecer aunque el correo no exista. Esto evita enumeracion de usuarios.
+
+El token no se devuelve por JSON ni se guarda en claro. Se envia por correo usando la API externa configurada. En base de datos solo queda `token_hash`, `expires_at` y `used_at`.
+
+Cambiar contrasena con el token recibido por correo:
+
+```bash
+curl -X POST http://localhost:4000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d "{\"token\":\"TOKEN_DEL_CORREO\",\"password\":\"NuevoPassword123\",\"confirmPassword\":\"NuevoPassword123\"}"
+```
+
+Response esperado:
+
+```json
+{
+  "ok": true,
+  "message": "Contrasena actualizada correctamente."
+}
+```
+
+Prueba de seguridad: reutilizar el mismo token debe fallar.
+
+```json
+{
+  "error": "Token invalido o expirado."
+}
+```
+
+### 3. Request/response de API propia
 
 Crear producto:
 
@@ -114,7 +167,7 @@ Response esperado:
 }
 ```
 
-### 3. Flujo completo con API externa
+### 4. Flujo completo con API externa
 
 Con `EMAIL_PROVIDER=mock`, vender una unidad para dejar el producto en stock bajo:
 

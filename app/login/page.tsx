@@ -90,6 +90,12 @@ export default function LoginPage() {
                   />
                 </label>
 
+                <div className="text-right">
+                  <Link href="/forgot-password" className="text-sm font-bold text-slate-950 hover:text-sky-700">
+                    Olvide mi contraseña
+                  </Link>
+                </div>
+
                 {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
 
                 <button

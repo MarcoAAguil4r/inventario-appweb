@@ -1,11 +1,11 @@
 const resendEndpoint = 'https://api.resend.com/emails';
 
-function requireEmailConfig() {
+function requireEmailConfig(recipient) {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.ALERT_EMAIL_TO;
+  const to = recipient ?? process.env.ALERT_EMAIL_TO;
 
   if (!from || !to) {
-    const error = new Error('EMAIL_FROM y ALERT_EMAIL_TO son requeridos para enviar alertas.');
+    const error = new Error('EMAIL_FROM y el destinatario son requeridos para enviar correos.');
     error.statusCode = 500;
     throw error;
   }
@@ -13,9 +13,9 @@ function requireEmailConfig() {
   return { from, to };
 }
 
-export async function sendInventoryAlert({ subject, html, text }) {
+export async function sendEmail({ to: recipient, subject, html, text }) {
   const provider = process.env.EMAIL_PROVIDER ?? 'mock';
-  const { from, to } = requireEmailConfig();
+  const { from, to } = requireEmailConfig(recipient);
 
   if (!subject || (!html && !text)) {
     const error = new Error('Subject y contenido son requeridos para enviar el correo.');
@@ -76,4 +76,8 @@ export async function sendInventoryAlert({ subject, html, text }) {
     to,
     subject,
   };
+}
+
+export async function sendInventoryAlert({ subject, html, text }) {
+  return sendEmail({ subject, html, text });
 }
