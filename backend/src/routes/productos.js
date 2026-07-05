@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { sendInventoryAlert } from '../services/email.js';
 
 const router = Router();
 
@@ -519,7 +520,19 @@ router.post('/:id/venta', async (req, res, next) => {
     });
 
     if (result.error) return res.status(result.status).json({ error: result.error });
-    return res.status(201).json({ producto: mapProducto(result.producto), total: result.total });
+
+    const producto = mapProducto(result.producto);
+    let alerta = null;
+
+    if (producto.activo && producto.stock_actual <= producto.stock_minimo) {
+      alerta = await sendInventoryAlert({
+        subject: `Stock bajo: ${producto.nombre}`,
+        text: `El producto ${producto.nombre} quedo con ${producto.stock_actual} unidades. Minimo configurado: ${producto.stock_minimo}.`,
+        html: `<p>El producto <strong>${producto.nombre}</strong> quedo con ${producto.stock_actual} unidades.</p><p>Minimo configurado: ${producto.stock_minimo}.</p>`,
+      });
+    }
+
+    return res.status(201).json({ producto, total: result.total, alerta });
   } catch (error) {
     return next(error);
   }
