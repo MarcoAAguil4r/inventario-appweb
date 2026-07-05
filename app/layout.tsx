@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Inventario SaaS - Control de Inventario en Tiempo Real",
-  description: "Gestiona tu inventario con facilidad. Reportes automáticos, alertas de stock bajo y control en tiempo real.",
+  title: "Inventario - Gestión de Inventario",
+  description: "Sistema para gestionar productos, stock, productos dañados, mermas y alertas de bajo inventario.",
 };
 
 export default function RootLayout({

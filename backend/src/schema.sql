@@ -1,0 +1,77 @@
+CREATE TABLE IF NOT EXISTS usuarios (
+  id_usuario INT AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(120) NOT NULL,
+  correo VARCHAR(180) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  rol VARCHAR(50) NOT NULL DEFAULT 'admin',
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id_reset INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL DEFAULT NULL,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_password_reset_usuario (id_usuario),
+  INDEX idx_password_reset_token_hash (token_hash),
+  CONSTRAINT fk_password_reset_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+    ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS productos (
+  id_producto INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  nombre VARCHAR(160) NOT NULL,
+  categoria VARCHAR(120) NOT NULL,
+  precio_compra DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  precio_venta DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  stock_actual INT NOT NULL DEFAULT 0,
+  stock_minimo INT NOT NULL DEFAULT 0,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_productos_usuario (id_usuario),
+  CONSTRAINT fk_productos_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+);
+
+CREATE TABLE IF NOT EXISTS productos_danados (
+  id_producto_danado INT AUTO_INCREMENT PRIMARY KEY,
+  id_producto_original INT NOT NULL,
+  cantidad INT NOT NULL,
+  precio_reducido DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  descripcion_dano TEXT NOT NULL,
+  vendible BOOLEAN NOT NULL DEFAULT TRUE,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_productos_danados_producto
+    FOREIGN KEY (id_producto_original) REFERENCES productos(id_producto)
+);
+
+CREATE TABLE IF NOT EXISTS mermas (
+  id_merma INT AUTO_INCREMENT PRIMARY KEY,
+  id_producto INT NOT NULL,
+  cantidad INT NOT NULL,
+  motivo TEXT NOT NULL,
+  costo_perdida DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mermas_producto
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+);
+
+CREATE TABLE IF NOT EXISTS movimientos_inventario (
+  id_movimiento INT AUTO_INCREMENT PRIMARY KEY,
+  id_producto INT NOT NULL,
+  tipo_movimiento VARCHAR(80) NOT NULL,
+  cantidad INT NOT NULL DEFAULT 0,
+  stock_anterior INT NOT NULL,
+  stock_nuevo INT NOT NULL,
+  motivo TEXT,
+  fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_movimientos_producto
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+);
