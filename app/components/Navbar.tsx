@@ -89,9 +89,10 @@ export default function Navbar() {
           </div>
         </Link>
 
+        {/* MENÚ ESCRITORIO */}
         <div className="hidden items-center gap-8 md:flex">
           {['inicio', 'solucion', 'demo', 'contacto'].map((item) => (
-            <Link 
+            <a 
               key={item} 
               href={`/#${item}`}
               className={`text-sm font-medium capitalize transition-all duration-300 relative group ${
@@ -102,7 +103,7 @@ export default function Navbar() {
               <span className={`absolute -bottom-1.5 left-0 h-0.5 bg-sky-500 transition-all duration-300 ${
                 activeSection === item ? 'w-full' : 'w-0 group-hover:w-full group-hover:bg-slate-300'
               }`}></span>
-            </Link>
+            </a>
           ))}
         </div>
 
@@ -112,9 +113,6 @@ export default function Navbar() {
           </Link>
           <Link href="/registro" className="text-sm font-medium text-slate-600 transition hover:text-slate-900">
             Registro
-          </Link>
-          <Link href="/inventario" className="rounded-full bg-slate-950 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-950/10 transition hover:bg-slate-800">
-            Inventario
           </Link>
         </div>
 
@@ -136,12 +134,12 @@ export default function Navbar() {
         </button>
       </div>
 
-      
+      {/* MENÚ MÓVIL */}
       {isMobileMenuOpen && (
         <div className="absolute left-0 top-[80px] w-full border-b border-slate-200 bg-white px-4 py-6 shadow-xl md:hidden">
           <div className="flex flex-col gap-4">
             {['inicio', 'solucion', 'demo', 'contacto'].map((item) => (
-              <Link 
+              <a 
                 key={item} 
                 href={`/#${item}`}
                 onClick={() => setIsMobileMenuOpen(false)} 
@@ -151,14 +149,12 @@ export default function Navbar() {
               >
                 {activeSection === item && <span className="w-2 h-2 rounded-full bg-sky-500 mr-3"></span>}
                 {item}
-              </Link>
+              </a>
             ))}
             
             <hr className="my-2 border-slate-100" />
             
-            <Link href="/inventario" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
-              Inventario
-            </Link>
+            
             <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="w-full text-center text-sm font-medium text-slate-700 transition hover:text-slate-900">
               Entrar
             </Link>
