@@ -98,7 +98,7 @@ Resultado obtenido:
 
 ## Commits relacionados
 
-- Pendiente de registrar despues del commit local.
+- `42383ce` - Fix API healthcheck availability
 
 ## Entregable individual
 
