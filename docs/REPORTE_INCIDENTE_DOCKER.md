@@ -31,7 +31,7 @@ JSONArgsRecommended: JSON arguments recommended for CMD to prevent unintended be
 - Se activo `output: "standalone"` en Next para producir una imagen de runtime mas ligera.
 - Se usaron comandos `CMD` en formato JSON/exec.
 
-## Evidencia antes
+## Error reproducible
 
 Estado de la rama antes del fix:
 
@@ -58,7 +58,19 @@ Advertencia reproducible detectada en validacion Docker previa:
 JSONArgsRecommended: JSON arguments recommended for CMD to prevent unintended behavior related to OS signals
 ```
 
-## Evidencia despues
+## Fix aplicado en codigo
+
+Archivos modificados o agregados:
+
+- `.dockerignore`
+- `Dockerfile`
+- `backend/Dockerfile`
+- `docker-compose.yml`
+- `next.config.ts`
+- `README.md`
+- `docs/REPORTE_INCIDENTE_DOCKER.md`
+
+## Validacion posterior
 
 Comandos de validacion:
 

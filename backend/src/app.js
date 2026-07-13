@@ -15,9 +15,12 @@ if (!process.env.JWT_SECRET) {
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 
-app.get('/api/health', (_req, res) => {
+const healthHandler = (_req, res) => {
   res.json({ ok: true, service: 'inventario-backend' });
-});
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/productos', productosRoutes);
