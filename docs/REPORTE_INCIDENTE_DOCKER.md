@@ -84,7 +84,7 @@ Las imagenes de frontend y backend construyen usando CMD en formato exec.
 
 ## Commits relacionados
 
-- Pendiente de registrar despues del commit local.
+- `7d4587a` - Add Docker setup for app services
 
 ## Entregable individual
 
