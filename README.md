@@ -33,6 +33,26 @@ npm install
 npm run dev
 ```
 
+## Inicio con Docker
+
+Levanta MySQL, backend y frontend:
+
+```bash
+docker compose up --build
+```
+
+Servicios:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:4000`
+- MySQL: `localhost:3306`
+
+Validar la configuracion sin levantar contenedores:
+
+```bash
+docker compose config
+```
+
 Backend:
 
 ```bash
