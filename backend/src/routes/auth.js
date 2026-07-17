@@ -3,11 +3,13 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { query, withTransaction } from '../db.js';
+import { createPasswordResetRateLimiter } from '../middleware/passwordResetRateLimit.js';
 import { sendEmail } from '../services/email.js';
 
 const router = Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const resetTokenTtlMinutes = 30;
+const passwordResetRateLimiter = createPasswordResetRateLimiter();
 const forgotPasswordResponse = {
   ok: true,
   message: 'Si el correo existe, enviaremos instrucciones para recuperar la contrasena.',
@@ -132,9 +134,9 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/forgot-password', passwordResetRateLimiter, async (req, res, next) => {
   try {
-    const correo = String(req.body.correo ?? '').trim().toLowerCase();
+    const correo = req.normalizedPasswordResetEmail;
 
     if (!correo || !emailPattern.test(correo)) {
       return res.status(200).json(forgotPasswordResponse);

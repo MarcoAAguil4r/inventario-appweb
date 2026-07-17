@@ -99,7 +99,14 @@ Respuesta esperada `200`:
 
 ## POST /api/auth/forgot-password
 
-Solicita un enlace de recuperacion. Si el correo existe, se crea un token aleatorio, se guarda solo su hash y se envia el link por correo externo.
+Solicita un enlace de recuperacion. El correo se normaliza antes de contar solicitudes. Si no se supera el limite y el correo existe, se crea un token aleatorio, se guarda solo su hash y se envia el link por correo externo.
+
+Limites configurables:
+
+| Variable | Default | Descripcion |
+| --- | --- | --- |
+| `PASSWORD_RESET_MAX_REQUESTS` | `3` | Maximo de solicitudes permitidas por IP y por correo dentro de la ventana |
+| `PASSWORD_RESET_WINDOW_MINUTES` | `30` | Ventana temporal del limite |
 
 Parametros requeridos:
 
@@ -123,6 +130,17 @@ Respuesta esperada `200`:
   "message": "Si el correo existe, enviaremos instrucciones para recuperar la contrasena."
 }
 ```
+
+Respuesta al superar el limite `429`:
+
+```json
+{
+  "ok": false,
+  "message": "Se realizaron demasiadas solicitudes. Intenta nuevamente más tarde."
+}
+```
+
+Las solicitudes bloqueadas no generan token, no guardan registros en `password_reset_tokens` y no llaman al servicio de correo. La respuesta publica sigue sin confirmar si el correo existe.
 
 ## POST /api/auth/reset-password
 
@@ -162,3 +180,4 @@ Errores comunes:
 | 400 | Datos invalidos, passwords no coinciden o token expirado |
 | 401 | Credenciales incorrectas |
 | 409 | Correo ya registrado |
+| 429 | Demasiadas solicitudes de recuperacion de contrasena por IP o correo |
