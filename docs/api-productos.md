@@ -26,6 +26,7 @@ Formato:
 | Metodo | Endpoint | Funcion |
 | --- | --- | --- |
 | GET | `/api/productos` | Lista productos del usuario |
+| GET | `/api/productos/:id` | Consulta el detalle de un producto del usuario |
 | POST | `/api/productos` | Crea un producto |
 | PUT | `/api/productos/:id` | Actualiza un producto |
 | PATCH | `/api/productos/:id/desactivar` | Desactiva un producto |
@@ -58,6 +59,49 @@ Respuesta esperada `200`:
     "estado": "disponible"
   }
 ]
+```
+
+## GET /api/productos/:id
+
+Devuelve el detalle de un producto por identificador. La consulta filtra por el usuario autenticado, por lo que un producto inexistente o perteneciente a otro usuario responde como no encontrado.
+
+Parametros requeridos:
+
+| Parametro | Ubicacion | Requerido | Descripcion |
+| --- | --- | --- | --- |
+| `Authorization` | header | Si | Token JWT |
+| `id` | path | Si | ID numerico del producto |
+
+Respuesta esperada `200`:
+
+```json
+{
+  "id_producto": 1,
+  "nombre": "Cafe",
+  "categoria": "Abarrotes",
+  "precio_compra": 40,
+  "precio_venta": 65,
+  "stock_actual": 5,
+  "stock_minimo": 2,
+  "activo": true,
+  "estado": "disponible"
+}
+```
+
+Los productos inactivos tambien pueden consultarse y conservan su estado:
+
+```json
+{
+  "id_producto": 1,
+  "nombre": "Cafe",
+  "categoria": "Abarrotes",
+  "precio_compra": 40,
+  "precio_venta": 65,
+  "stock_actual": 5,
+  "stock_minimo": 2,
+  "activo": false,
+  "estado": "desactivado"
+}
 ```
 
 ## POST /api/productos

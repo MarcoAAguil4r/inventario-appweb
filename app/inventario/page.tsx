@@ -2,6 +2,7 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiRequest, clearSession, getToken } from '@/lib/api';
 import type { Merma, MovimientoInventario, Producto, ProductoDanado, ResumenDia } from '@/lib/api';
@@ -571,9 +572,14 @@ export default function InventarioPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap gap-2">
-                            <button onClick={() => selectProduct(producto)} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
+                            <Link
+                              href={`/inventario/productos/${producto.id_producto}`}
+                              prefetch={false}
+                              onClick={() => selectProduct(producto)}
+                              className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+                            >
                               Ver detalle
-                            </button>
+                            </Link>
                             <button onClick={() => startEdit(producto)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
                               Editar
                             </button>
