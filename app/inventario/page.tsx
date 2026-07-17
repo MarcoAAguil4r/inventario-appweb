@@ -163,7 +163,7 @@ export default function InventarioPage() {
       categoria: producto.categoria,
       precio_compra: String(producto.precio_compra),
       precio_venta: String(producto.precio_venta),
-      stock_actual: String(producto.stock_actual),
+      stock_actual: '',
       stock_minimo: String(producto.stock_minimo),
     });
     setStatus('');
@@ -192,18 +192,25 @@ export default function InventarioPage() {
     setError('');
     setStatus('');
 
-    const payload = {
+    const payload: {
+      nombre: string;
+      categoria: string;
+      precio_compra: number;
+      precio_venta: number;
+      stock_minimo: number;
+      stock_actual?: number;
+    } = {
       nombre: form.nombre,
       categoria: form.categoria,
       precio_compra: Number(form.precio_compra),
       precio_venta: Number(form.precio_venta),
-      stock_actual: Number(form.stock_actual),
       stock_minimo: Number(form.stock_minimo),
     };
 
     try {
       const path = editingId ? `/api/productos/${editingId}` : '/api/productos';
       const method = editingId ? 'PUT' : 'POST';
+      if (!editingId) payload.stock_actual = Number(form.stock_actual);
       const producto = await apiRequest<Producto>(path, {
         method,
         body: JSON.stringify(payload),
@@ -846,7 +853,7 @@ function ProductFormPanel({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Precio compra" type="number" value={form.precio_compra} onChange={(value) => onChange('precio_compra', value)} />
           <Field label="Precio venta" type="number" value={form.precio_venta} onChange={(value) => onChange('precio_venta', value)} />
-          <Field label="Stock actual" type="number" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />
+          {!editingId && <Field label="Stock actual" type="number" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />}
           <Field label="Stock mínimo" type="number" value={form.stock_minimo} onChange={(value) => onChange('stock_minimo', value)} />
         </div>
       </div>

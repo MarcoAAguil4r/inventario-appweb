@@ -150,7 +150,7 @@ Respuesta esperada `201`:
 
 ## PUT /api/productos/:id
 
-Actualiza los datos principales de un producto. Si cambia el stock, registra un movimiento de actualizacion.
+Actualiza los datos generales de un producto sin modificar el stock actual. Los cambios de stock deben realizarse desde los modulos operativos que registran trazabilidad.
 
 Parametros requeridos:
 
@@ -161,7 +161,6 @@ Parametros requeridos:
 | `categoria` | body | Si | Categoria actualizada |
 | `precio_compra` | body | Si | Costo actualizado |
 | `precio_venta` | body | Si | Precio actualizado |
-| `stock_actual` | body | Si | Stock actualizado |
 | `stock_minimo` | body | Si | Stock minimo actualizado |
 
 Request:
@@ -172,12 +171,13 @@ Request:
   "categoria": "Abarrotes",
   "precio_compra": 42,
   "precio_venta": 68,
-  "stock_actual": 8,
   "stock_minimo": 2
 }
 ```
 
-Respuesta esperada `200`: producto actualizado en formato JSON.
+Respuesta esperada `200`: producto actualizado en formato JSON conservando `stock_actual`.
+
+Si el payload incluye `stock_actual`, la API responde `400` y no modifica el producto.
 
 ## PATCH /api/productos/:id/desactivar
 
