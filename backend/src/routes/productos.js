@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
+import { getProductDetail, mapProducto } from '../services/productDetail.js';
 
 const router = Router();
 
@@ -10,25 +11,6 @@ router.use(requireAuth);
 function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : NaN;
-}
-
-function estadoProducto(producto) {
-  if (!producto.activo) return 'desactivado';
-  if (Number(producto.stock_actual) <= 0) return 'agotado';
-  if (Number(producto.stock_actual) <= Number(producto.stock_minimo)) return 'bajo stock';
-  return 'disponible';
-}
-
-function mapProducto(producto) {
-  return {
-    ...producto,
-    precio_compra: Number(producto.precio_compra),
-    precio_venta: Number(producto.precio_venta),
-    stock_actual: Number(producto.stock_actual),
-    stock_minimo: Number(producto.stock_minimo),
-    activo: Boolean(producto.activo),
-    estado: estadoProducto(producto),
-  };
 }
 
 function validarProducto(body) {
@@ -283,6 +265,20 @@ router.get('/mermas', async (req, res, next) => {
         costo_perdida: Number(merma.costo_perdida),
       })),
     );
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const result = await getProductDetail({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      queryFn: query,
+    });
+
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }
