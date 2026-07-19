@@ -102,9 +102,19 @@ export default function InventarioPage() {
       saleItems
         .map((item) => {
           const producto = productos.find((current) => current.id_producto === item.id_producto);
-          return producto ? { ...item, producto } : null;
+          return producto
+            ? {
+                ...item,
+                producto,
+                precio_unitario: Number(producto.precio_venta),
+                subtotal: item.cantidad * Number(producto.precio_venta),
+              }
+            : null;
         })
-        .filter((item): item is SaleItem & { producto: Producto } => Boolean(item)),
+        .filter(
+          (item): item is SaleItem & { producto: Producto; precio_unitario: number; subtotal: number } =>
+            Boolean(item),
+        ),
     [productos, saleItems],
   );
   const loadProductos = useCallback(async () => {
@@ -894,10 +904,11 @@ export default function InventarioPage() {
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="w-full min-w-[620px] text-left text-sm">
+                    <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Precio</th>
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Stock</th>
                           <th className="px-4 py-3">Subtotal</th>
@@ -908,6 +919,7 @@ export default function InventarioPage() {
                         {saleItemsDetailed.map((item) => (
                           <tr key={item.id_producto}>
                             <td className="px-4 py-3 font-semibold text-slate-950">{item.producto.nombre}</td>
+                            <td className="px-4 py-3 text-slate-600">{formatCurrency(item.precio_unitario)}</td>
                             <td className="px-4 py-3">
                               <input
                                 type="number"
@@ -922,7 +934,7 @@ export default function InventarioPage() {
                               />
                             </td>
                             <td className="px-4 py-3 text-slate-600">{item.producto.stock_actual}</td>
-                            <td className="px-4 py-3 text-slate-600">{formatCurrency(item.cantidad * item.producto.precio_venta)}</td>
+                            <td className="px-4 py-3 font-bold text-slate-950">{formatCurrency(item.subtotal)}</td>
                             <td className="px-4 py-3">
                               <button type="button" onClick={() => removeSaleItem(item.id_producto)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                                 Eliminar

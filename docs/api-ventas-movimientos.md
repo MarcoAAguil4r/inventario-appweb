@@ -30,7 +30,7 @@ Authorization: Bearer <token>
 
 ## POST /api/ventas
 
-Registra una venta en una sola transaccion. Consolida productos repetidos, valida pertenencia del usuario, productos activos y stock suficiente antes de modificar existencias.
+Registra una venta en una sola transaccion. Consolida productos repetidos, valida pertenencia del usuario, productos activos y stock suficiente antes de modificar existencias. El backend obtiene los precios desde la base de datos, calcula subtotales por linea, suma el total general y guarda el precio aplicado en `detalle_venta`.
 
 Parametros requeridos:
 
@@ -68,7 +68,7 @@ Respuesta esperada `201`:
     "total": 150,
     "nota": "Venta mostrador"
   },
-  "detalle": [
+  "detalles": [
     {
       "id_detalle_venta": 1,
       "id_venta": 80,
@@ -77,8 +77,18 @@ Respuesta esperada `201`:
       "cantidad": 2,
       "precio_unitario": 65,
       "subtotal": 130
+    },
+    {
+      "id_detalle_venta": 2,
+      "id_venta": 80,
+      "id_producto": 5,
+      "producto": "Azucar",
+      "cantidad": 1,
+      "precio_unitario": 20,
+      "subtotal": 20
     }
   ],
+  "total": 150,
   "movimientos": [
     {
       "id_movimiento": 50,

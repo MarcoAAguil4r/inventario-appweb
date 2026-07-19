@@ -138,11 +138,26 @@ test('registra venta con un producto', async () => {
 
   assert.equal(result.status, 201);
   assert.equal(result.body.venta.total, 130);
+  assert.equal(result.body.total, 130);
   assert.equal(result.body.detalle.length, 1);
+  assert.deepEqual(result.body.detalles.map(({ id_producto, precio_unitario, cantidad, subtotal }) => ({
+    id_producto,
+    precio_unitario,
+    cantidad,
+    subtotal,
+  })), [
+    {
+      id_producto: 1,
+      precio_unitario: 65,
+      cantidad: 2,
+      subtotal: 130,
+    },
+  ]);
   assert.equal(result.body.movimientos[0].stock_anterior, 10);
   assert.equal(result.body.movimientos[0].stock_nuevo, 8);
   assert.equal(calls.filter((call) => /^INSERT INTO ventas/.test(call.sql)).length, 1);
   assert.match(calls.find((call) => /^INSERT INTO ventas/.test(call.sql)).sql, /folio/);
+  assert.deepEqual(calls.find((call) => /^INSERT INTO detalle_venta/.test(call.sql)).params, [80, 1, 2, 65, 130]);
 });
 
 test('registra venta con varios productos en una sola venta', async () => {
@@ -161,7 +176,27 @@ test('registra venta con varios productos en una sola venta', async () => {
 
   assert.equal(result.status, 201);
   assert.equal(result.body.venta.total, 150);
+  assert.equal(result.body.total, 150);
   assert.equal(result.body.detalle.length, 2);
+  assert.deepEqual(result.body.detalles.map(({ id_producto, precio_unitario, cantidad, subtotal }) => ({
+    id_producto,
+    precio_unitario,
+    cantidad,
+    subtotal,
+  })), [
+    {
+      id_producto: 1,
+      precio_unitario: 65,
+      cantidad: 2,
+      subtotal: 130,
+    },
+    {
+      id_producto: 5,
+      precio_unitario: 20,
+      cantidad: 1,
+      subtotal: 20,
+    },
+  ]);
   assert.equal(result.body.movimientos.length, 2);
   assert.equal(calls.filter((call) => /^INSERT INTO ventas/.test(call.sql)).length, 1);
   assert.equal(calls.filter((call) => /^UPDATE productos SET stock_actual/.test(call.sql)).length, 2);

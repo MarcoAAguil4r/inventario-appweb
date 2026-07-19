@@ -177,7 +177,7 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
        FROM detalle_venta d
        INNER JOIN productos p ON p.id_producto = d.id_producto
        WHERE d.id_venta = ?
-       ORDER BY d.id_detalle_venta ASC`,
+       ORDER BY d.${detailIdColumn} ASC`,
       [idVenta],
     );
     const [movimientos] = await connection.execute(
@@ -198,6 +198,13 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
       movimientosIds,
     );
 
+    const detalles = detalle.map((item) => ({
+      ...item,
+      cantidad: Number(item.cantidad),
+      precio_unitario: Number(item.precio_unitario),
+      subtotal: Number(item.subtotal),
+    }));
+
     return {
       status: 201,
       body: {
@@ -206,12 +213,9 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
           total,
           nota: parsed.data.nota || null,
         },
-        detalle: detalle.map((item) => ({
-          ...item,
-          cantidad: Number(item.cantidad),
-          precio_unitario: Number(item.precio_unitario),
-          subtotal: Number(item.subtotal),
-        })),
+        detalles,
+        detalle: detalles,
+        total,
         movimientos: movimientos.map(mapMovimiento),
       },
     };
