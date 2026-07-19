@@ -70,11 +70,13 @@ CREATE TABLE IF NOT EXISTS mermas (
 CREATE TABLE IF NOT EXISTS ventas (
   id_venta INT AUTO_INCREMENT PRIMARY KEY,
   id_usuario INT NOT NULL,
+  folio VARCHAR(20) NULL,
   total DECIMAL(10, 2) NOT NULL DEFAULT 0,
   nota TEXT,
   estado VARCHAR(20) NOT NULL DEFAULT 'CONFIRMADA',
   creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_ventas_usuario (id_usuario),
+  INDEX idx_ventas_folio (folio),
   INDEX idx_ventas_usuario_estado_fecha (id_usuario, estado, creado_en),
   CONSTRAINT fk_ventas_usuario
     FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)

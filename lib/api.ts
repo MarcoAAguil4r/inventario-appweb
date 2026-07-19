@@ -72,6 +72,33 @@ export type ResumenDia = {
   balance_potencial: number;
 };
 
+export type VentaResumen = {
+  id_venta: number;
+  folio: string;
+  total: number;
+  estado: 'CONFIRMADA' | 'CANCELADA';
+  nota: string | null;
+  creado_en: string;
+  responsable: string;
+  total_productos: number;
+  lineas: number;
+};
+
+export type VentaDetalleLinea = {
+  id_detalle_venta: number;
+  id_venta: number;
+  id_producto: number;
+  producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+};
+
+export type VentaDetalle = VentaResumen & {
+  detalles: VentaDetalleLinea[];
+  movimientos: MovimientoInventario[];
+};
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
 export function getToken() {

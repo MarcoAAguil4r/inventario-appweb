@@ -5,7 +5,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiRequest, clearSession, getStoredUser, getToken } from '@/lib/api';
-import type { Merma, MovimientoInventario, Producto, ProductoDanado, ResumenDia, Usuario } from '@/lib/api';
+import type {
+  Merma,
+  MovimientoInventario,
+  Producto,
+  ProductoDanado,
+  ResumenDia,
+  Usuario,
+  VentaDetalle,
+  VentaResumen,
+} from '@/lib/api';
 
 type ProductoForm = {
   nombre: string;
@@ -28,6 +37,7 @@ type InventorySection =
   | 'registrar'
   | 'ajuste'
   | 'venta'
+  | 'ventas'
   | 'dano'
   | 'merma'
   | 'danados'
@@ -86,7 +96,10 @@ export default function InventarioPage() {
   const [productosDanados, setProductosDanados] = useState<ProductoDanado[]>([]);
   const [mermas, setMermas] = useState<Merma[]>([]);
   const [resumenDia, setResumenDia] = useState<ResumenDia>(emptyResumen);
+  const [ventas, setVentas] = useState<VentaResumen[]>([]);
+  const [selectedSale, setSelectedSale] = useState<VentaDetalle | null>(null);
   const [summaryDate, setSummaryDate] = useState(todayInputValue);
+  const [salesDate, setSalesDate] = useState(todayInputValue);
   const [statusFilter, setStatusFilter] = useState<'todos' | Producto['estado']>('todos');
   const [form, setForm] = useState<ProductoForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -94,6 +107,7 @@ export default function InventarioPage() {
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '' });
   const [saleForm, setSaleForm] = useState({ producto_id: '', cantidad: '', nota: '' });
+  const [saleSearch, setSaleSearch] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<{ tipo: 'entrada' | 'salida'; cantidad: string; motivo: string }>({
     tipo: 'entrada',
@@ -126,6 +140,16 @@ export default function InventarioPage() {
       return sum + item.cantidad * Number(producto?.precio_venta ?? 0);
     }, 0);
   }, [productos, saleItems]);
+  const saleSearchText = saleSearch.trim().toLowerCase();
+  const searchableSaleProducts = useMemo(
+    () =>
+      saleSearchText
+        ? activeProducts.filter((producto) =>
+            `${producto.nombre} ${producto.categoria}`.toLowerCase().includes(saleSearchText),
+          )
+        : activeProducts,
+    [activeProducts, saleSearchText],
+  );
   const wasteEstimatedCost = useMemo(() => {
     const cantidad = Number(wasteForm.cantidad);
 
@@ -172,11 +196,14 @@ export default function InventarioPage() {
             [],
             emptyResumen,
           ]);
-      const [productosData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
+      const ventasRequest = apiRequest<VentaResumen[]>(`/api/ventas?fecha=${encodeURIComponent(salesDate)}`);
+      const [productosData, ventasData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
         productosRequest,
+        ventasRequest,
         adminRequests,
       ]);
       setProductos(productosData);
+      setVentas(ventasData);
       setMovimientos(movimientosData);
       setProductosDanados(danadosData);
       setMermas(mermasData);
@@ -192,7 +219,7 @@ export default function InventarioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, router, summaryDate]);
+  }, [isAdmin, router, salesDate, summaryDate]);
 
   useEffect(() => {
     if (!getToken()) {
@@ -463,9 +490,50 @@ export default function InventarioPage() {
       setSaleItems([]);
       setSaleForm({ producto_id: '', cantidad: '', nota: '' });
       setStatus('Venta registrada en una sola operacion.');
+      setActiveSection('ventas');
       await loadProductos();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo registrar la venta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function loadSaleDetail(idVenta: number) {
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const venta = await apiRequest<VentaDetalle>(`/api/ventas/${idVenta}`);
+      setSelectedSale(venta);
+      setActiveSection('ventas');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar el detalle de la venta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function cancelSelectedSale(venta: VentaResumen | VentaDetalle) {
+    const confirmed = window.confirm(`¿Seguro que quieres cancelar la venta ${venta.folio}? Se devolverá el stock al inventario.`);
+
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      await apiRequest(`/api/ventas/${venta.id_venta}/cancelar`, {
+        method: 'PATCH',
+        body: JSON.stringify({ motivo: 'Cancelada desde historial de ventas' }),
+      });
+      setStatus(`Venta ${venta.folio} cancelada y stock devuelto.`);
+      setSelectedSale(null);
+      await loadProductos();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo cancelar la venta.');
     } finally {
       setIsSaving(false);
     }
@@ -560,6 +628,7 @@ export default function InventarioPage() {
         { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
         { id: 'ajuste', label: 'Ajustar stock', description: 'Entrada o salida manual' },
         { id: 'venta', label: 'Punto de venta', description: 'Venta con varios productos' },
+        { id: 'ventas', label: 'Ventas', description: 'Historial, detalle y cancelacion' },
       ],
     },
     {
@@ -717,6 +786,7 @@ export default function InventarioPage() {
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
                   <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
                   <QuickAction title="Punto de venta" description="Registra varios productos en un ticket." onClick={() => setActiveSection('venta')} />
+                  <QuickAction title="Historial de ventas" description="Detalle y cancelacion." onClick={() => setActiveSection('ventas')} />
                   <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
                 </div>
               </section>
@@ -854,6 +924,7 @@ export default function InventarioPage() {
                 <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
                 <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
                 <QuickAction title="Punto de venta" description="Armar ticket con varios productos." onClick={() => setActiveSection('venta')} disabled={activeProducts.length === 0} />
+                <QuickAction title="Ver ventas" description="Historial y cancelaciones." onClick={() => setActiveSection('ventas')} />
                 <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
@@ -909,6 +980,12 @@ export default function InventarioPage() {
           <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <ActionPanel title="Punto de venta" description="Agrega productos activos al mismo ticket y confirma una sola venta.">
               <form onSubmit={addSaleItem} className="grid gap-4">
+                <Field
+                  label="Buscar producto"
+                  value={saleSearch}
+                  onChange={setSaleSearch}
+                  required={false}
+                />
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">Producto del inventario</span>
                   <select
@@ -918,7 +995,7 @@ export default function InventarioPage() {
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   >
                     <option value="">Selecciona un producto</option>
-                    {activeProducts.map((producto) => (
+                    {searchableSaleProducts.map((producto) => (
                       <option key={producto.id_producto} value={producto.id_producto}>
                         {producto.nombre} - stock {producto.stock_actual}
                       </option>
@@ -940,7 +1017,12 @@ export default function InventarioPage() {
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Productos disponibles</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {activeProducts.map((producto) => {
+                  {searchableSaleProducts.length === 0 && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 sm:col-span-2">
+                      No hay productos que coincidan con la busqueda.
+                    </p>
+                  )}
+                  {searchableSaleProducts.map((producto) => {
                     const itemInSale = saleItems.find((item) => item.id_producto === producto.id_producto);
                     const remainingStock = producto.stock_actual - (itemInSale?.cantidad ?? 0);
 
@@ -1026,6 +1108,132 @@ export default function InventarioPage() {
                   Confirmar venta
                 </button>
               </div>
+            </ActionPanel>
+          </section>
+        )}
+
+        {activeSection === 'ventas' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+            <DataTablePanel
+              title="Historial de ventas"
+              eyebrow="Ventas"
+              emptyText="No hay ventas registradas para la fecha seleccionada."
+              hasRows={ventas.length > 0}
+            >
+              <div className="border-b border-slate-200 p-5">
+                <label className="block max-w-xs">
+                  <span className="text-sm font-semibold text-slate-700">Fecha de venta</span>
+                  <input
+                    type="date"
+                    value={salesDate}
+                    onChange={(event) => setSalesDate(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  />
+                </label>
+              </div>
+              <table className="w-full min-w-[780px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Folio</th>
+                    <th className="px-5 py-4">Fecha</th>
+                    <th className="px-5 py-4">Total</th>
+                    <th className="px-5 py-4">Estado</th>
+                    <th className="px-5 py-4">Productos</th>
+                    <th className="px-5 py-4">Responsable</th>
+                    <th className="px-5 py-4">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ventas.map((venta) => (
+                    <tr key={venta.id_venta} className={selectedSale?.id_venta === venta.id_venta ? 'bg-sky-50/70' : 'bg-white'}>
+                      <td className="px-5 py-4 font-semibold text-slate-950">{venta.folio}</td>
+                      <td className="px-5 py-4 text-slate-600">{formatDate(venta.creado_en)}</td>
+                      <td className="px-5 py-4 text-slate-600">{formatCurrency(venta.total)}</td>
+                      <td className="px-5 py-4">
+                        <SaleStatusBadge estado={venta.estado} />
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {venta.total_productos} en {venta.lineas} linea(s)
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{venta.responsable}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => loadSaleDetail(venta.id_venta)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
+                            Ver detalle
+                          </button>
+                          {venta.estado !== 'CANCELADA' && (
+                            <button type="button" onClick={() => cancelSelectedSale(venta)} disabled={isSaving} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataTablePanel>
+
+            <ActionPanel title="Detalle de venta" description="Consulta lineas, totales, nota y movimientos asociados.">
+              {!selectedSale ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                  Selecciona una venta para revisar su detalle.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Info label="Folio" value={selectedSale.folio} />
+                    <Info label="Estado" value={selectedSale.estado} />
+                    <Info label="Total" value={formatCurrency(selectedSale.total)} />
+                    <Info label="Responsable" value={selectedSale.responsable} />
+                  </div>
+                  {selectedSale.nota && <Info label="Nota" value={selectedSale.nota} />}
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full min-w-[620px] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Cantidad</th>
+                          <th className="px-4 py-3">Precio</th>
+                          <th className="px-4 py-3">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedSale.detalles.map((detalle) => (
+                          <tr key={detalle.id_detalle_venta}>
+                            <td className="px-4 py-3 font-semibold text-slate-950">{detalle.producto}</td>
+                            <td className="px-4 py-3 text-slate-600">{detalle.cantidad}</td>
+                            <td className="px-4 py-3 text-slate-600">{formatCurrency(detalle.precio_unitario)}</td>
+                            <td className="px-4 py-3 font-bold text-slate-950">{formatCurrency(detalle.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Movimientos asociados</p>
+                    {selectedSale.movimientos.length === 0 ? (
+                      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                        No hay movimientos asociados.
+                      </p>
+                    ) : (
+                      selectedSale.movimientos.map((movimiento) => (
+                        <div key={movimiento.id_movimiento} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                          <p className="font-bold text-slate-950">{formatMovementType(movimiento.tipo_movimiento)} - {movimiento.producto}</p>
+                          <p className="mt-1 text-slate-600">
+                            {movimiento.stock_anterior} &rarr; {movimiento.stock_nuevo} | {movimiento.motivo ?? 'Sin motivo'}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {selectedSale.estado !== 'CANCELADA' && (
+                    <button type="button" onClick={() => cancelSelectedSale(selectedSale)} disabled={isSaving} className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
+                      Cancelar venta y devolver stock
+                    </button>
+                  )}
+                </div>
+              )}
             </ActionPanel>
           </section>
         )}
@@ -1384,6 +1592,19 @@ function StatusBadge({ estado }: { estado: Producto['estado'] }) {
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${styles[estado]}`}>
+      {estado}
+    </span>
+  );
+}
+
+function SaleStatusBadge({ estado }: { estado: VentaResumen['estado'] }) {
+  const styles = {
+    CONFIRMADA: 'bg-sky-50 text-sky-700 border-sky-200',
+    CANCELADA: 'bg-red-50 text-red-700 border-red-200',
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${styles[estado]}`}>
       {estado}
     </span>
   );

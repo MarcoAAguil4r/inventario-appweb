@@ -21,6 +21,9 @@ Authorization: Bearer <token>
 | Metodo | Endpoint | Funcion |
 | --- | --- | --- |
 | POST | `/api/ventas` | Registra una venta con uno o varios productos |
+| GET | `/api/ventas?fecha=YYYY-MM-DD` | Lista ventas de una fecha |
+| GET | `/api/ventas/:id` | Consulta detalle formal de venta |
+| PATCH | `/api/ventas/:id/cancelar` | Cancela venta y devuelve stock |
 | POST | `/api/productos/:id/venta` | Legacy: registra venta de un solo producto |
 | POST | `/api/productos/:id/danado` | Registra producto danado vendible |
 | POST | `/api/productos/:id/merma` | Registra perdida o merma |
@@ -106,6 +109,80 @@ Respuesta esperada `201`:
 ```
 
 Si una linea no tiene stock suficiente, toda la venta se rechaza y no se descuenta ningun producto.
+
+## GET /api/ventas
+
+Lista ventas del usuario autenticado. Si se envia `fecha`, se filtra por el dia local del negocio.
+
+Respuesta esperada `200`:
+
+```json
+[
+  {
+    "id_venta": 80,
+    "folio": "V001",
+    "total": 150,
+    "estado": "CONFIRMADA",
+    "nota": "Venta mostrador",
+    "creado_en": "2026-07-15T12:00:00.000Z",
+    "responsable": "Marco",
+    "total_productos": 3,
+    "lineas": 2
+  }
+]
+```
+
+## GET /api/ventas/:id
+
+Consulta una venta por identificador. Solo devuelve ventas del usuario autenticado.
+
+Respuesta esperada `200`:
+
+```json
+{
+  "id_venta": 80,
+  "folio": "V001",
+  "total": 150,
+  "estado": "CONFIRMADA",
+  "nota": "Venta mostrador",
+  "creado_en": "2026-07-15T12:00:00.000Z",
+  "responsable": "Marco",
+  "detalles": [
+    {
+      "id_detalle_venta": 1,
+      "id_producto": 1,
+      "producto": "Cafe",
+      "cantidad": 2,
+      "precio_unitario": 65,
+      "subtotal": 130
+    }
+  ],
+  "movimientos": []
+}
+```
+
+## PATCH /api/ventas/:id/cancelar
+
+Cancela una venta confirmada, cambia su estado a `CANCELADA`, devuelve stock por cada linea y registra movimientos de tipo `cancelacion_venta`.
+La venta no se elimina.
+
+Body opcional:
+
+```json
+{
+  "motivo": "Error de captura"
+}
+```
+
+Respuesta esperada `200`:
+
+```json
+{
+  "id_venta": 80,
+  "estado": "CANCELADA",
+  "productos_revertidos": 2
+}
+```
 
 ## POST /api/productos/:id/venta
 
@@ -291,3 +368,5 @@ Errores comunes:
 | 400 | Fecha invalida |
 | 401 | Token faltante, invalido o expirado |
 | 403 | Usuario autenticado sin rol admin para reportes, mermas, danos o historial |
+| 404 | Venta o producto no encontrado |
+| 409 | Venta ya cancelada o sin detalle para revertir |

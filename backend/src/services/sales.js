@@ -52,6 +52,11 @@ function createSaleFolio() {
   return `V${Date.now().toString(36).toUpperCase()}`.slice(0, 20);
 }
 
+function toMoney(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
 async function getTableColumns(connection, tableName, columnNames) {
   const [columns] = await connection.execute(
     `SELECT COLUMN_NAME
@@ -63,6 +68,19 @@ async function getTableColumns(connection, tableName, columnNames) {
   );
 
   return new Set(columns.map((column) => column.COLUMN_NAME));
+}
+
+async function getQueryTableColumns(queryFn, tableName, columnNames) {
+  const rows = await queryFn(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME IN (${placeholders(columnNames.length)})`,
+    [tableName, ...columnNames],
+  );
+
+  return new Set(rows.map((column) => column.COLUMN_NAME));
 }
 
 async function getDetailSaleIdColumn(connection) {
@@ -222,6 +240,236 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
         detalle: detalles,
         total,
         movimientos: movimientos.map(mapMovimiento),
+      },
+    };
+  });
+}
+
+export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
+  const params = [idUsuario];
+  let dateCondition = '';
+  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado']);
+  const folioSelect = salesColumns.has('folio')
+    ? "COALESCE(v.folio, CONCAT('VENTA-', v.id_venta)) AS folio"
+    : "CONCAT('VENTA-', v.id_venta) AS folio";
+  const estadoSelect = salesColumns.has('estado')
+    ? "COALESCE(v.estado, 'CONFIRMADA') AS estado"
+    : "'CONFIRMADA' AS estado";
+  const groupColumns = [
+    'v.id_venta',
+    salesColumns.has('folio') ? 'v.folio' : null,
+    'v.total',
+    salesColumns.has('estado') ? 'v.estado' : null,
+    'v.nota',
+    'v.creado_en',
+    'u.nombre',
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  if (fecha) {
+    const bounds = getDayBoundsFn(fecha);
+
+    if (!bounds) {
+      return { status: 400, body: { error: 'Fecha invalida. Usa formato YYYY-MM-DD.' } };
+    }
+
+    dateCondition = 'AND v.creado_en >= ? AND v.creado_en < ?';
+    params.push(bounds.startUtc, bounds.endUtc);
+  }
+
+  const rows = await queryFn(
+    `SELECT
+      v.id_venta,
+      ${folioSelect},
+      v.total,
+      ${estadoSelect},
+      v.nota,
+      v.creado_en,
+      u.nombre AS responsable,
+      COALESCE(SUM(d.cantidad), 0) AS total_productos,
+      COUNT(d.id_producto) AS lineas
+     FROM ventas v
+     INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
+     LEFT JOIN detalle_venta d ON d.id_venta = v.id_venta
+     WHERE v.id_usuario = ?
+       ${dateCondition}
+     GROUP BY ${groupColumns}
+     ORDER BY v.creado_en DESC, v.id_venta DESC`,
+    params,
+  );
+
+  return {
+    status: 200,
+    body: rows.map((row) => ({
+      ...row,
+      total: toMoney(row.total),
+      total_productos: Number(row.total_productos),
+      lineas: Number(row.lineas),
+    })),
+  };
+}
+
+export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
+  const idVenta = parseInteger(idParam);
+
+  if (Number.isNaN(idVenta) || idVenta <= 0) {
+    return { status: 400, body: { error: 'Venta invalida.' } };
+  }
+
+  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado']);
+  const detailColumns = await getQueryTableColumns(queryFn, 'detalle_venta', ['id_detalle_venta', 'id_detalle']);
+  const folioSelect = salesColumns.has('folio')
+    ? "COALESCE(v.folio, CONCAT('VENTA-', v.id_venta)) AS folio"
+    : "CONCAT('VENTA-', v.id_venta) AS folio";
+  const estadoSelect = salesColumns.has('estado')
+    ? "COALESCE(v.estado, 'CONFIRMADA') AS estado"
+    : "'CONFIRMADA' AS estado";
+  const detailIdColumn = detailColumns.has('id_detalle_venta') ? 'id_detalle_venta' : 'id_detalle';
+
+  const sales = await queryFn(
+    `SELECT
+      v.id_venta,
+      ${folioSelect},
+      v.total,
+      ${estadoSelect},
+      v.nota,
+      v.creado_en,
+      u.nombre AS responsable
+     FROM ventas v
+     INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
+     WHERE v.id_venta = ? AND v.id_usuario = ?
+     LIMIT 1`,
+    [idVenta, idUsuario],
+  );
+  const venta = sales[0];
+
+  if (!venta) {
+    return { status: 404, body: { error: 'Venta no encontrada.' } };
+  }
+
+  const detalles = await queryFn(
+    `SELECT
+      d.${detailIdColumn} AS id_detalle_venta,
+      d.id_venta,
+      d.id_producto,
+      p.nombre AS producto,
+      d.cantidad,
+      d.precio_unitario,
+      d.subtotal
+     FROM detalle_venta d
+     INNER JOIN productos p ON p.id_producto = d.id_producto
+     WHERE d.id_venta = ?
+     ORDER BY d.id_detalle_venta ASC`,
+    [idVenta],
+  );
+  const movimientos = await queryFn(
+    `SELECT
+      m.id_movimiento,
+      m.id_producto,
+      p.nombre AS producto,
+      m.tipo_movimiento,
+      m.cantidad,
+      m.stock_anterior,
+      m.stock_nuevo,
+      m.motivo,
+      m.id_usuario,
+      u.nombre AS responsable,
+      m.fecha
+     FROM movimientos_inventario m
+     INNER JOIN productos p ON p.id_producto = m.id_producto
+     LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
+     WHERE p.id_usuario = ?
+       AND (m.motivo LIKE ? OR m.motivo LIKE ?)
+     ORDER BY m.fecha ASC, m.id_movimiento ASC`,
+    [idUsuario, `Venta ${idVenta}%`, `Cancelacion venta ${idVenta}%`],
+  );
+
+  return {
+    status: 200,
+    body: {
+      ...venta,
+      total: toMoney(venta.total),
+      detalles: detalles.map((item) => ({
+        ...item,
+        cantidad: Number(item.cantidad),
+        precio_unitario: toMoney(item.precio_unitario),
+        subtotal: toMoney(item.subtotal),
+      })),
+      movimientos: movimientos.map(mapMovimiento),
+    },
+  };
+}
+
+export async function cancelSale({ idUsuario, idParam, body = {}, withTransactionFn }) {
+  const idVenta = parseInteger(idParam);
+
+  if (Number.isNaN(idVenta) || idVenta <= 0) {
+    return { status: 400, body: { error: 'Venta invalida.' } };
+  }
+
+  return withTransactionFn(async (connection) => {
+    const [sales] = await connection.execute(
+      `SELECT id_venta, total, nota, COALESCE(estado, 'CONFIRMADA') AS estado
+       FROM ventas
+       WHERE id_venta = ? AND id_usuario = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [idVenta, idUsuario],
+    );
+    const venta = sales[0];
+
+    if (!venta) {
+      return { status: 404, body: { error: 'Venta no encontrada.' } };
+    }
+
+    if (venta.estado === 'CANCELADA') {
+      return { status: 409, body: { error: 'La venta ya esta cancelada.' } };
+    }
+
+    const [detalles] = await connection.execute(
+      `SELECT d.id_producto, d.cantidad, p.stock_actual, p.nombre
+       FROM detalle_venta d
+       INNER JOIN productos p ON p.id_producto = d.id_producto
+       WHERE d.id_venta = ? AND p.id_usuario = ?
+       FOR UPDATE`,
+      [idVenta, idUsuario],
+    );
+
+    if (detalles.length === 0) {
+      return { status: 409, body: { error: 'La venta no tiene detalle para revertir stock.' } };
+    }
+
+    const motivoUsuario = String(body.motivo ?? '').trim();
+    const motivo = [`Cancelacion venta ${idVenta}`, motivoUsuario].filter(Boolean).join(' | ');
+
+    await connection.execute(
+      "UPDATE ventas SET estado = 'CANCELADA' WHERE id_venta = ? AND id_usuario = ?",
+      [idVenta, idUsuario],
+    );
+
+    for (const detalle of detalles) {
+      const stockAnterior = Number(detalle.stock_actual);
+      const stockNuevo = stockAnterior + Number(detalle.cantidad);
+
+      await connection.execute(
+        'UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?',
+        [stockNuevo, detalle.id_producto, idUsuario],
+      );
+      await connection.execute(
+        `INSERT INTO movimientos_inventario
+          (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, id_usuario)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [detalle.id_producto, 'cancelacion_venta', Number(detalle.cantidad), stockAnterior, stockNuevo, motivo, idUsuario],
+      );
+    }
+
+    return {
+      status: 200,
+      body: {
+        id_venta: idVenta,
+        estado: 'CANCELADA',
+        productos_revertidos: detalles.length,
       },
     };
   });
