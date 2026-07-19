@@ -115,6 +115,9 @@ test('rechaza venta vacia y cantidades invalidas', () => {
   assert.deepEqual(validateSalePayload({ productos: [{ id_producto: 1, cantidad: 0 }] }), {
     error: 'Todas las cantidades deben ser enteras mayores que cero.',
   });
+  assert.deepEqual(validateSalePayload({ productos: [{ id_producto: 1, cantidad: 0.1 }] }), {
+    error: 'Todas las cantidades deben ser enteras mayores que cero.',
+  });
 });
 
 test('registra venta con un producto', async () => {

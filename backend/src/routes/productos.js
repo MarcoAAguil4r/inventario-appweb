@@ -31,6 +31,10 @@ function validarProducto(body) {
     return { error: 'Precios y stocks deben ser números mayores o iguales a cero.' };
   }
 
+  if (![stockActual, stockMinimo].every(Number.isInteger)) {
+    return { error: 'Los stocks deben ser numeros enteros.' };
+  }
+
   return {
     data: {
       nombre,
@@ -361,7 +365,7 @@ router.post('/:id/danado', async (req, res, next) => {
   const precioReducido = toNumber(req.body.precio_reducido);
   const descripcion = String(req.body.descripcion_dano ?? '').trim();
 
-  if (!Number.isInteger(id) || cantidad <= 0 || precioReducido < 0 || !descripcion) {
+  if (!Number.isInteger(id) || !Number.isInteger(cantidad) || cantidad <= 0 || precioReducido < 0 || !descripcion) {
     return res.status(400).json({ error: 'Cantidad, precio reducido y descripción son requeridos.' });
   }
 
@@ -410,7 +414,7 @@ router.post('/:id/merma', async (req, res, next) => {
   const motivo = String(req.body.motivo ?? '').trim();
   const costoPerdida = toNumber(req.body.costo_perdida);
 
-  if (!Number.isInteger(id) || cantidad <= 0 || costoPerdida < 0 || !motivo) {
+  if (!Number.isInteger(id) || !Number.isInteger(cantidad) || cantidad <= 0 || costoPerdida < 0 || !motivo) {
     return res.status(400).json({ error: 'Cantidad, motivo y costo de pérdida son requeridos.' });
   }
 

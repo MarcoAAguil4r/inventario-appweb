@@ -314,27 +314,24 @@ export default function InventarioPage() {
     }
   }
 
-  function addSaleItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const idProducto = Number(saleForm.producto_id);
-    const cantidad = Number(saleForm.cantidad);
+  function tryAddSaleItem(idProducto: number, cantidad: number) {
     const producto = activeProducts.find((item) => item.id_producto === idProducto);
 
     if (!producto) {
       setError('Selecciona un producto activo.');
-      return;
+      return false;
     }
 
     if (!Number.isInteger(cantidad) || cantidad <= 0) {
       setError('La cantidad debe ser un entero mayor que cero.');
-      return;
+      return false;
     }
 
     const currentQuantity = saleItems.find((item) => item.id_producto === idProducto)?.cantidad ?? 0;
 
     if (currentQuantity + cantidad > producto.stock_actual) {
       setError(`La cantidad total no puede superar el stock disponible (${producto.stock_actual}).`);
-      return;
+      return false;
     }
 
     setSaleItems((current) => {
@@ -347,8 +344,18 @@ export default function InventarioPage() {
 
       return [...current, { id_producto: idProducto, cantidad }];
     });
-    setSaleForm((current) => ({ ...current, producto_id: '', cantidad: '' }));
     setError('');
+    return true;
+  }
+
+  function addSaleItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const idProducto = Number(saleForm.producto_id);
+    const cantidad = Number(saleForm.cantidad);
+
+    if (tryAddSaleItem(idProducto, cantidad)) {
+      setSaleForm((current) => ({ ...current, producto_id: '', cantidad: '' }));
+    }
   }
 
   function updateSaleItemQuantity(idProducto: number, value: string) {
@@ -497,7 +504,7 @@ export default function InventarioPage() {
         { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición' },
         { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
         { id: 'ajuste', label: 'Ajustar stock', description: 'Entrada o salida manual' },
-        { id: 'venta', label: 'Vender producto', description: 'Salida por venta' },
+        { id: 'venta', label: 'Punto de venta', description: 'Venta con varios productos' },
       ],
     },
     {
@@ -629,7 +636,7 @@ export default function InventarioPage() {
                   <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
                   <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                  <QuickAction title="Vender producto" description="Descuenta stock por venta." onClick={() => setActiveSection('venta')} />
+                  <QuickAction title="Punto de venta" description="Registra varios productos en un ticket." onClick={() => setActiveSection('venta')} />
                   <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
                 </div>
               </section>
@@ -766,7 +773,7 @@ export default function InventarioPage() {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
                 <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                <QuickAction title="Vender producto" description="Descontar unidades vendidas." onClick={() => setActiveSection('venta')} disabled={!selectedProduct?.activo} />
+                <QuickAction title="Punto de venta" description="Armar ticket con varios productos." onClick={() => setActiveSection('venta')} disabled={activeProducts.length === 0} />
                 <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
@@ -800,6 +807,8 @@ export default function InventarioPage() {
                 <Field
                   label="Cantidad"
                   type="number"
+                  numericMode="integer"
+                  min="1"
                   value={adjustmentForm.cantidad}
                   onChange={(value) => setAdjustmentForm((current) => ({ ...current, cantidad: value }))}
                 />
@@ -817,8 +826,8 @@ export default function InventarioPage() {
         )}
 
         {activeSection === 'venta' && (
-          <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-            <ActionPanel title="Agregar productos" description="Selecciona productos activos y consolida cantidades antes de confirmar.">
+          <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <ActionPanel title="Punto de venta" description="Agrega productos activos al mismo ticket y confirma una sola venta.">
               <form onSubmit={addSaleItem} className="grid gap-4">
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">Producto del inventario</span>
@@ -839,6 +848,8 @@ export default function InventarioPage() {
                 <Field
                   label="Cantidad"
                   type="number"
+                  numericMode="integer"
+                  min="1"
                   value={saleForm.cantidad}
                   onChange={(value) => setSaleForm((current) => ({ ...current, cantidad: value }))}
                 />
@@ -846,13 +857,40 @@ export default function InventarioPage() {
                   Agregar a la venta
                 </button>
               </form>
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Productos disponibles</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {activeProducts.map((producto) => {
+                    const itemInSale = saleItems.find((item) => item.id_producto === producto.id_producto);
+                    const remainingStock = producto.stock_actual - (itemInSale?.cantidad ?? 0);
+
+                    return (
+                      <button
+                        key={producto.id_producto}
+                        type="button"
+                        onClick={() => tryAddSaleItem(producto.id_producto, 1)}
+                        disabled={remainingStock <= 0}
+                        className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-300 hover:bg-sky-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                      >
+                        <span className="block text-sm font-bold text-slate-950">{producto.nombre}</span>
+                        <span className="mt-1 block text-xs font-semibold text-slate-500">
+                          {formatCurrency(producto.precio_venta)} | stock disponible {remainingStock}
+                        </span>
+                        <span className="mt-3 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+                          Agregar 1
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </ActionPanel>
 
-            <ActionPanel title="Venta actual" description="Revisa cantidades y confirma la venta en una sola operacion.">
+            <ActionPanel title="Ticket de venta" description="Modifica cantidades enteras, elimina lineas y confirma una sola solicitud.">
               <div className="grid gap-4">
                 {saleItemsDetailed.length === 0 ? (
                   <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
-                    Agrega al menos un producto para registrar la venta.
+                    Agrega productos al ticket para registrar la venta.
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -875,6 +913,9 @@ export default function InventarioPage() {
                                 type="number"
                                 min="1"
                                 max={item.producto.stock_actual}
+                                step="1"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={item.cantidad}
                                 onChange={(event) => updateSaleItemQuantity(item.id_producto, event.target.value)}
                                 className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
@@ -919,7 +960,7 @@ export default function InventarioPage() {
                   onChange={setSelectedId}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Cantidad" type="number" numericMode="integer" min="1" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
                   <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
                 </div>
                 <Field label="Descripción del daño" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
@@ -943,7 +984,7 @@ export default function InventarioPage() {
                   onChange={setSelectedId}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Cantidad" type="number" numericMode="integer" min="1" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
                   <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
                 </div>
                 <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
@@ -1082,8 +1123,8 @@ function ProductFormPanel({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Precio compra" type="number" value={form.precio_compra} onChange={(value) => onChange('precio_compra', value)} />
           <Field label="Precio venta" type="number" value={form.precio_venta} onChange={(value) => onChange('precio_venta', value)} />
-          {!editingId && <Field label="Stock actual" type="number" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />}
-          <Field label="Stock mínimo" type="number" value={form.stock_minimo} onChange={(value) => onChange('stock_minimo', value)} />
+          {!editingId && <Field label="Stock actual" type="number" numericMode="integer" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />}
+          <Field label="Stock mínimo" type="number" numericMode="integer" value={form.stock_minimo} onChange={(value) => onChange('stock_minimo', value)} />
         </div>
       </div>
 
@@ -1189,12 +1230,16 @@ function Field({
   onChange,
   type = 'text',
   required = true,
+  numericMode = 'decimal',
+  min,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: 'text' | 'number';
   required?: boolean;
+  numericMode?: 'decimal' | 'integer';
+  min?: string;
 }) {
   return (
     <label className="block">
@@ -1203,8 +1248,10 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         type={type}
-        min={type === 'number' ? '0' : undefined}
-        step={type === 'number' ? '0.01' : undefined}
+        min={type === 'number' ? (min ?? '0') : undefined}
+        step={type === 'number' ? (numericMode === 'integer' ? '1' : '0.01') : undefined}
+        inputMode={type === 'number' ? (numericMode === 'integer' ? 'numeric' : 'decimal') : undefined}
+        pattern={type === 'number' && numericMode === 'integer' ? '[0-9]*' : undefined}
         required={required}
         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
       />

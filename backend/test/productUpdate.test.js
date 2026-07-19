@@ -105,6 +105,17 @@ test('rechaza precios o stock minimo negativos', () => {
   });
 });
 
+test('rechaza stock minimo decimal', () => {
+  const parsed = validateProductUpdate({
+    ...validBody,
+    stock_minimo: 0.5,
+  });
+
+  assert.deepEqual(parsed, {
+    error: 'El stock minimo debe ser un numero entero.',
+  });
+});
+
 test('responde 400 para ID invalido sin abrir transaccion', async () => {
   let transactions = 0;
   const result = await updateProductGeneral({
