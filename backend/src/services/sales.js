@@ -48,18 +48,27 @@ function mapMovimiento(row) {
   };
 }
 
-async function getDetailSaleIdColumn(connection) {
+function createSaleFolio() {
+  return `V${Date.now().toString(36).toUpperCase()}`.slice(0, 20);
+}
+
+async function getTableColumns(connection, tableName, columnNames) {
   const [columns] = await connection.execute(
     `SELECT COLUMN_NAME
      FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = DATABASE()
-       AND TABLE_NAME = 'detalle_venta'
-       AND COLUMN_NAME IN ('id_detalle_venta', 'id_detalle')
-     ORDER BY FIELD(COLUMN_NAME, 'id_detalle_venta', 'id_detalle')
-     LIMIT 1`,
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME IN (${placeholders(columnNames.length)})`,
+    [tableName, ...columnNames],
   );
 
-  return columns[0]?.COLUMN_NAME ?? 'id_detalle_venta';
+  return new Set(columns.map((column) => column.COLUMN_NAME));
+}
+
+async function getDetailSaleIdColumn(connection) {
+  const columns = await getTableColumns(connection, 'detalle_venta', ['id_detalle_venta', 'id_detalle']);
+
+  return columns.has('id_detalle_venta') ? 'id_detalle_venta' : 'id_detalle';
 }
 
 export async function createSale({ idUsuario, body, withTransactionFn }) {
@@ -101,9 +110,23 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
       return sum + item.cantidad * Number(producto.precio_venta);
     }, 0);
 
+    const salesColumns = await getTableColumns(connection, 'ventas', ['folio', 'nota']);
+    const insertColumns = ['id_usuario', 'total'];
+    const insertValues = [idUsuario, total];
+
+    if (salesColumns.has('folio')) {
+      insertColumns.push('folio');
+      insertValues.push(createSaleFolio());
+    }
+
+    if (salesColumns.has('nota')) {
+      insertColumns.push('nota');
+      insertValues.push(parsed.data.nota || null);
+    }
+
     const [saleResult] = await connection.execute(
-      'INSERT INTO ventas (id_usuario, total, nota) VALUES (?, ?, ?)',
-      [idUsuario, total, parsed.data.nota || null],
+      `INSERT INTO ventas (${insertColumns.join(', ')}) VALUES (${placeholders(insertColumns.length)})`,
+      insertValues,
     );
     const idVenta = saleResult.insertId;
     const movimientosIds = [];

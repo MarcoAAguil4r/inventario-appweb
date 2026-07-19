@@ -40,6 +40,10 @@ function createConnection({ rows = products, saleId = 80 } = {}) {
         }
 
         if (/INFORMATION_SCHEMA\.COLUMNS/.test(sql)) {
+          if (params[0] === 'ventas') {
+            return [[{ COLUMN_NAME: 'folio' }, { COLUMN_NAME: 'nota' }]];
+          }
+
           return [[{ COLUMN_NAME: 'id_detalle_venta' }]];
         }
 
@@ -138,6 +142,7 @@ test('registra venta con un producto', async () => {
   assert.equal(result.body.movimientos[0].stock_anterior, 10);
   assert.equal(result.body.movimientos[0].stock_nuevo, 8);
   assert.equal(calls.filter((call) => /^INSERT INTO ventas/.test(call.sql)).length, 1);
+  assert.match(calls.find((call) => /^INSERT INTO ventas/.test(call.sql)).sql, /folio/);
 });
 
 test('registra venta con varios productos en una sola venta', async () => {
