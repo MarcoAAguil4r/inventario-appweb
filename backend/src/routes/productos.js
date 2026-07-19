@@ -6,6 +6,7 @@ import { getProductDetail, mapProducto } from '../services/productDetail.js';
 import { adjustProductStock } from '../services/productStockAdjustment.js';
 import { updateProductGeneral } from '../services/productUpdate.js';
 import { listProductWastes, registerProductWaste } from '../services/productWaste.js';
+import { getOperationalSummary } from '../services/operationalSummary.js';
 
 const router = Router();
 
@@ -93,55 +94,13 @@ router.get('/', async (req, res, next) => {
 
 router.get('/resumen/dia', async (req, res, next) => {
   try {
-    const [resumen] = await query(
-      `SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN m.tipo_movimiento = 'venta' AND m.motivo LIKE '%total %'
-            THEN CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(m.motivo, 'total ', -1), ' |', 1) AS DECIMAL(10, 2))
-            WHEN m.tipo_movimiento = 'venta'
-            THEN m.cantidad * p.precio_venta
-            ELSE 0
-          END
-        ), 0) AS ventas_dia,
-        COALESCE(SUM(
-          CASE
-            WHEN m.stock_nuevo > m.stock_anterior
-            THEN (m.stock_nuevo - m.stock_anterior) * (p.precio_venta - p.precio_compra)
-            ELSE 0
-          END
-        ), 0) AS margen_potencial,
-        COALESCE((
-          SELECT SUM(mm.costo_perdida)
-          FROM mermas mm
-          INNER JOIN productos pm ON pm.id_producto = mm.id_producto
-          WHERE pm.id_usuario = ? AND DATE(mm.creado_en) = CURRENT_DATE()
-        ), 0) AS perdidas,
-        COALESCE((
-          SELECT SUM(pd.cantidad * pd.precio_reducido)
-          FROM productos_danados pd
-          INNER JOIN productos ppd ON ppd.id_producto = pd.id_producto_original
-          WHERE ppd.id_usuario = ? AND pd.vendible = true AND DATE(pd.creado_en) = CURRENT_DATE()
-        ), 0) AS valor_danado_vendible
-      FROM movimientos_inventario m
-      INNER JOIN productos p ON p.id_producto = m.id_producto
-      WHERE p.id_usuario = ? AND DATE(m.fecha) = CURRENT_DATE()`,
-      [req.user.id_usuario, req.user.id_usuario, req.user.id_usuario],
-    );
-
-    const margenPotencial = Number(resumen?.margen_potencial ?? 0);
-    const ventasDia = Number(resumen?.ventas_dia ?? 0);
-    const perdidas = Number(resumen?.perdidas ?? 0);
-    const valorDanadoVendible = Number(resumen?.valor_danado_vendible ?? 0);
-
-    return res.json({
-      margen_potencial: margenPotencial,
-      ganancia_potencial: margenPotencial,
-      ventas_dia: ventasDia,
-      perdidas,
-      valor_danado_vendible: valorDanadoVendible,
-      balance_potencial: ventasDia - perdidas,
+    const result = await getOperationalSummary({
+      idUsuario: req.user.id_usuario,
+      fecha: req.query.fecha,
+      queryFn: query,
     });
+
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }

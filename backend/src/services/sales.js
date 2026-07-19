@@ -110,7 +110,7 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
       return sum + item.cantidad * Number(producto.precio_venta);
     }, 0);
 
-    const salesColumns = await getTableColumns(connection, 'ventas', ['folio', 'nota']);
+    const salesColumns = await getTableColumns(connection, 'ventas', ['folio', 'nota', 'estado']);
     const insertColumns = ['id_usuario', 'total'];
     const insertValues = [idUsuario, total];
 
@@ -122,6 +122,11 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
     if (salesColumns.has('nota')) {
       insertColumns.push('nota');
       insertValues.push(parsed.data.nota || null);
+    }
+
+    if (salesColumns.has('estado')) {
+      insertColumns.push('estado');
+      insertValues.push('CONFIRMADA');
     }
 
     const [saleResult] = await connection.execute(

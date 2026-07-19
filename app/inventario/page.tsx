@@ -45,12 +45,25 @@ const emptyForm: ProductoForm = {
 };
 
 const emptyResumen: ResumenDia = {
+  fecha: '',
+  zona_horaria: 'America/Mexico_City',
+  ventas_confirmadas: 0,
   margen_potencial: 0,
   ventas_dia: 0,
   perdidas: 0,
   valor_danado_vendible: 0,
+  balance: 0,
   balance_potencial: 0,
 };
+
+function todayInputValue() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
 
 export default function InventarioPage() {
   const router = useRouter();
@@ -60,6 +73,7 @@ export default function InventarioPage() {
   const [productosDanados, setProductosDanados] = useState<ProductoDanado[]>([]);
   const [mermas, setMermas] = useState<Merma[]>([]);
   const [resumenDia, setResumenDia] = useState<ResumenDia>(emptyResumen);
+  const [summaryDate, setSummaryDate] = useState(todayInputValue);
   const [statusFilter, setStatusFilter] = useState<'todos' | Producto['estado']>('todos');
   const [form, setForm] = useState<ProductoForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -134,7 +148,7 @@ export default function InventarioPage() {
         apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
         apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
         apiRequest<Merma[]>('/api/productos/mermas'),
-        apiRequest<ResumenDia>('/api/productos/resumen/dia'),
+        apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`),
       ]);
       setProductos(productosData);
       setMovimientos(movimientosData);
@@ -152,7 +166,7 @@ export default function InventarioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, summaryDate]);
 
   useEffect(() => {
     if (!getToken()) {
@@ -623,10 +637,29 @@ export default function InventarioPage() {
 
         {activeSection === 'resumen' && (
           <section className="mt-6 space-y-5">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5">
+              <label className="block max-w-xs">
+                <span className="text-sm font-semibold text-slate-700">Fecha del resumen</span>
+                <input
+                  type="date"
+                  value={summaryDate}
+                  onChange={(event) => setSummaryDate(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
+              <p className="mt-3 text-xs font-semibold text-slate-500">
+                Zona horaria: {resumenDia.zona_horaria || 'America/Mexico_City'}
+              </p>
+            </section>
+
             <section className="grid gap-4 lg:grid-cols-4">
-              <Metric label="Ventas del día" value={formatCurrency(resumenDia.ventas_dia)} tone="success" />
+              <Metric label="Ventas confirmadas" value={formatCurrency(resumenDia.ventas_confirmadas ?? resumenDia.ventas_dia)} tone="success" />
               <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
-              <Metric label="Balance del día" value={formatCurrency(resumenDia.balance_potencial)} tone={resumenDia.balance_potencial < 0 ? 'danger' : 'success'} />
+              <Metric
+                label="Balance"
+                value={formatCurrency(resumenDia.balance ?? resumenDia.balance_potencial)}
+                tone={(resumenDia.balance ?? resumenDia.balance_potencial) < 0 ? 'danger' : 'success'}
+              />
               <Metric label="Daño vendible de hoy" value={formatCurrency(resumenDia.valor_danado_vendible)} tone="warning" />
             </section>
 

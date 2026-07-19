@@ -61,10 +61,14 @@ export type Merma = {
 };
 
 export type ResumenDia = {
+  fecha: string;
+  zona_horaria: string;
+  ventas_confirmadas: number;
   margen_potencial: number;
   ventas_dia: number;
   perdidas: number;
   valor_danado_vendible: number;
+  balance: number;
   balance_potencial: number;
 };
 

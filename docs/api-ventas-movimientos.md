@@ -26,7 +26,7 @@ Authorization: Bearer <token>
 | POST | `/api/productos/:id/merma` | Registra perdida o merma |
 | GET | `/api/productos/movimientos/recientes` | Lista movimientos recientes |
 | GET | `/api/productos/:id/movimientos` | Lista movimientos de un producto |
-| GET | `/api/productos/resumen/dia` | Devuelve resumen financiero del dia |
+| GET | `/api/productos/resumen/dia?fecha=YYYY-MM-DD` | Devuelve resumen operativo de una fecha |
 
 ## POST /api/ventas
 
@@ -251,18 +251,34 @@ Respuesta esperada `200`: arreglo JSON de movimientos asociados al producto.
 
 ## GET /api/productos/resumen/dia
 
-Devuelve ventas, perdidas, valor danado vendible y balance potencial del dia actual.
+Devuelve ventas confirmadas, perdidas por mermas y balance de una fecha especifica.
+Si `fecha` se omite, usa el dia actual del negocio. La fecha se valida con formato
+`YYYY-MM-DD` y los limites del dia se calculan con zona horaria `America/Mexico_City`.
+Las ventas con estado `CANCELADA` no se incluyen.
+
+Parametros opcionales:
+
+| Parametro | Ubicacion | Requerido | Descripcion |
+| --- | --- | --- | --- |
+| `fecha` | query | No | Fecha local del resumen en formato `YYYY-MM-DD` |
 
 Respuesta esperada `200`:
 
 ```json
 {
-  "margen_potencial": 100,
-  "ganancia_potencial": 100,
-  "ventas_dia": 65,
-  "perdidas": 40,
-  "valor_danado_vendible": 30,
-  "balance_potencial": 25
+  "fecha": "2026-07-15",
+  "zona_horaria": "America/Mexico_City",
+  "ventas_confirmadas": 500,
+  "perdidas": 80,
+  "balance": 420
+}
+```
+
+Respuesta esperada `400`:
+
+```json
+{
+  "error": "Fecha invalida. Usa formato YYYY-MM-DD."
 }
 ```
 
@@ -270,6 +286,5 @@ Errores comunes:
 
 | Codigo | Caso |
 | --- | --- |
-| 400 | Cantidad invalida o stock insuficiente |
+| 400 | Fecha invalida |
 | 401 | Token faltante, invalido o expirado |
-| 404 | Producto no encontrado |
