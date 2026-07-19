@@ -194,24 +194,22 @@ Respuesta esperada `201`: producto actualizado con menor stock.
 
 ## POST /api/productos/:id/merma
 
-Registra una perdida definitiva de inventario.
+Registra una perdida definitiva de inventario. El responsable se toma del JWT, el cliente no puede definirlo y el costo de perdida se calcula automaticamente con `cantidad * precio_compra`.
 
 Parametros requeridos:
 
 | Campo | Ubicacion | Tipo | Requerido | Descripcion |
 | --- | --- | --- | --- | --- |
 | `id` | path | number | Si | ID del producto |
-| `cantidad` | body | number | Si | Cantidad mayor a 0 |
+| `cantidad` | body | number | Si | Cantidad entera mayor a 0 |
 | `motivo` | body | string | Si | Motivo de la perdida |
-| `costo_perdida` | body | number | Si | Costo asociado a la perdida |
 
 Request:
 
 ```json
 {
   "cantidad": 1,
-  "motivo": "Producto caducado",
-  "costo_perdida": 40
+  "motivo": "Producto caducado"
 }
 ```
 

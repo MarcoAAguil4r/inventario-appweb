@@ -5,6 +5,7 @@ import { sendInventoryAlert } from '../services/email.js';
 import { getProductDetail, mapProducto } from '../services/productDetail.js';
 import { adjustProductStock } from '../services/productStockAdjustment.js';
 import { updateProductGeneral } from '../services/productUpdate.js';
+import { listProductWastes, registerProductWaste } from '../services/productWaste.js';
 
 const router = Router();
 
@@ -56,18 +57,25 @@ async function obtenerProducto(connection, id, idUsuario) {
 }
 
 async function registrarMovimiento(connection, movimiento) {
+  const columns = ['id_producto', 'tipo_movimiento', 'cantidad', 'stock_anterior', 'stock_nuevo', 'motivo'];
+  const values = [
+    movimiento.id_producto,
+    movimiento.tipo_movimiento,
+    movimiento.cantidad,
+    movimiento.stock_anterior,
+    movimiento.stock_nuevo,
+    movimiento.motivo,
+  ];
+
+  if (movimiento.id_usuario) {
+    columns.push('id_usuario');
+    values.push(movimiento.id_usuario);
+  }
+
   await connection.execute(
-    `INSERT INTO movimientos_inventario
-      (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [
-      movimiento.id_producto,
-      movimiento.tipo_movimiento,
-      movimiento.cantidad,
-      movimiento.stock_anterior,
-      movimiento.stock_nuevo,
-      movimiento.motivo,
-    ],
+    `INSERT INTO movimientos_inventario (${columns.join(', ')})
+     VALUES (${columns.map(() => '?').join(', ')})`,
+    values,
   );
 }
 
@@ -151,9 +159,12 @@ router.get('/movimientos/recientes', async (req, res, next) => {
         m.stock_anterior,
         m.stock_nuevo,
         m.motivo,
-        m.fecha
+        m.fecha,
+        m.id_usuario,
+        u.nombre AS responsable
       FROM movimientos_inventario m
       INNER JOIN productos p ON p.id_producto = m.id_producto
+      LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
       WHERE p.id_usuario = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC
       LIMIT 12`,
@@ -189,9 +200,12 @@ router.get('/:id/movimientos', async (req, res, next) => {
         m.stock_anterior,
         m.stock_nuevo,
         m.motivo,
-        m.fecha
+        m.fecha,
+        m.id_usuario,
+        u.nombre AS responsable
       FROM movimientos_inventario m
       INNER JOIN productos p ON p.id_producto = m.id_producto
+      LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
       WHERE p.id_usuario = ? AND m.id_producto = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC`,
       [req.user.id_usuario, id],
@@ -247,30 +261,12 @@ router.get('/danados-vendibles', async (req, res, next) => {
 
 router.get('/mermas', async (req, res, next) => {
   try {
-    const mermas = await query(
-      `SELECT
-        m.id_merma,
-        m.id_producto,
-        p.nombre AS producto,
-        m.cantidad,
-        m.motivo,
-        m.costo_perdida,
-        m.creado_en
-      FROM mermas m
-      INNER JOIN productos p ON p.id_producto = m.id_producto
-      WHERE p.id_usuario = ?
-      ORDER BY m.creado_en DESC, m.id_merma DESC
-      LIMIT 20`,
-      [req.user.id_usuario],
-    );
+    const mermas = await listProductWastes({
+      idUsuario: req.user.id_usuario,
+      queryFn: query,
+    });
 
-    return res.json(
-      mermas.map((merma) => ({
-        ...merma,
-        cantidad: Number(merma.cantidad),
-        costo_perdida: Number(merma.costo_perdida),
-      })),
-    );
+    return res.json(mermas);
   } catch (error) {
     return next(error);
   }
@@ -409,47 +405,15 @@ router.post('/:id/danado', async (req, res, next) => {
 });
 
 router.post('/:id/merma', async (req, res, next) => {
-  const id = Number(req.params.id);
-  const cantidad = toNumber(req.body.cantidad);
-  const motivo = String(req.body.motivo ?? '').trim();
-  const costoPerdida = toNumber(req.body.costo_perdida);
-
-  if (!Number.isInteger(id) || !Number.isInteger(cantidad) || cantidad <= 0 || costoPerdida < 0 || !motivo) {
-    return res.status(400).json({ error: 'Cantidad, motivo y costo de pérdida son requeridos.' });
-  }
-
   try {
-    const result = await withTransaction(async (connection) => {
-      const producto = await obtenerProducto(connection, id, req.user.id_usuario);
-      if (!producto) return { status: 404, error: 'Producto no encontrado.' };
-      if (!producto.activo) return { status: 400, error: 'No se puede modificar un producto desactivado.' };
-      if (Number(producto.stock_actual) < cantidad) return { status: 400, error: 'Stock insuficiente.' };
-
-      const stockNuevo = Number(producto.stock_actual) - cantidad;
-
-      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
-        stockNuevo,
-        id,
-        req.user.id_usuario,
-      ]);
-      await connection.execute(
-        'INSERT INTO mermas (id_producto, cantidad, motivo, costo_perdida) VALUES (?, ?, ?, ?)',
-        [id, cantidad, motivo, costoPerdida],
-      );
-      await registrarMovimiento(connection, {
-        id_producto: id,
-        tipo_movimiento: 'merma',
-        cantidad,
-        stock_anterior: Number(producto.stock_actual),
-        stock_nuevo: stockNuevo,
-        motivo,
-      });
-
-      return { producto: await obtenerProducto(connection, id, req.user.id_usuario) };
+    const result = await registerProductWaste({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      body: req.body,
+      withTransactionFn: withTransaction,
     });
 
-    if (result.error) return res.status(result.status).json({ error: result.error });
-    return res.status(201).json(mapProducto(result.producto));
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }

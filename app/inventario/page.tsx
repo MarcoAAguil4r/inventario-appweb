@@ -65,7 +65,7 @@ export default function InventarioPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
-  const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
+  const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '' });
   const [saleForm, setSaleForm] = useState({ producto_id: '', cantidad: '', nota: '' });
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<{ tipo: 'entrada' | 'salida'; cantidad: string; motivo: string }>({
@@ -97,6 +97,13 @@ export default function InventarioPage() {
       return sum + item.cantidad * Number(producto?.precio_venta ?? 0);
     }, 0);
   }, [productos, saleItems]);
+  const wasteEstimatedCost = useMemo(() => {
+    const cantidad = Number(wasteForm.cantidad);
+
+    if (!selectedProduct || !Number.isInteger(cantidad) || cantidad <= 0) return 0;
+
+    return cantidad * Number(selectedProduct.precio_compra);
+  }, [selectedProduct, wasteForm.cantidad]);
   const saleItemsDetailed = useMemo(
     () =>
       saleItems
@@ -311,10 +318,9 @@ export default function InventarioPage() {
         body: JSON.stringify({
           cantidad: Number(wasteForm.cantidad),
           motivo: wasteForm.motivo,
-          costo_perdida: Number(wasteForm.costo_perdida),
         }),
       });
-      setWasteForm({ cantidad: '', motivo: '', costo_perdida: '' });
+      setWasteForm({ cantidad: '', motivo: '' });
       setStatus('Merma: se descontó stock y se registró pérdida total.');
       await loadProductos();
     } catch (requestError) {
@@ -997,7 +1003,7 @@ export default function InventarioPage() {
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Cantidad" type="number" numericMode="integer" min="1" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
-                  <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
+                  <Info label="Costo calculado" value={formatCurrency(wasteEstimatedCost)} />
                 </div>
                 <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
                 <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
@@ -1061,6 +1067,7 @@ export default function InventarioPage() {
                     <th className="px-5 py-4">Cantidad</th>
                     <th className="px-5 py-4">Motivo</th>
                     <th className="px-5 py-4">Costo pérdida</th>
+                    <th className="px-5 py-4">Responsable</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1070,6 +1077,7 @@ export default function InventarioPage() {
                       <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
                       <td className="max-w-xs px-5 py-4 text-slate-600">{item.motivo}</td>
                       <td className="px-5 py-4 text-slate-600">{formatCurrency(item.costo_perdida)}</td>
+                      <td className="px-5 py-4 text-slate-600">{item.responsable ?? `Usuario ${item.id_usuario}`}</td>
                     </tr>
                   ))}
                 </tbody>

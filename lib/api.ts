@@ -31,6 +31,8 @@ export type MovimientoInventario = {
   stock_anterior: number;
   stock_nuevo: number;
   motivo: string | null;
+  id_usuario?: number | null;
+  responsable?: string | null;
   fecha: string;
 };
 
@@ -53,6 +55,8 @@ export type Merma = {
   cantidad: number;
   motivo: string;
   costo_perdida: number;
+  id_usuario: number;
+  responsable: string | null;
   creado_en: string;
 };
 

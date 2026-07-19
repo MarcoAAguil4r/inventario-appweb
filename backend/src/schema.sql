@@ -55,12 +55,16 @@ CREATE TABLE IF NOT EXISTS productos_danados (
 CREATE TABLE IF NOT EXISTS mermas (
   id_merma INT AUTO_INCREMENT PRIMARY KEY,
   id_producto INT NOT NULL,
+  id_usuario INT NOT NULL,
   cantidad INT NOT NULL,
   motivo TEXT NOT NULL,
   costo_perdida DECIMAL(10, 2) NOT NULL DEFAULT 0,
   creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_mermas_usuario (id_usuario),
   CONSTRAINT fk_mermas_producto
-    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto),
+  CONSTRAINT fk_mermas_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 );
 
 CREATE TABLE IF NOT EXISTS ventas (
@@ -97,7 +101,11 @@ CREATE TABLE IF NOT EXISTS movimientos_inventario (
   stock_anterior INT NOT NULL,
   stock_nuevo INT NOT NULL,
   motivo TEXT,
+  id_usuario INT NULL,
   fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_movimientos_usuario (id_usuario),
   CONSTRAINT fk_movimientos_producto
-    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto),
+  CONSTRAINT fk_movimientos_usuario
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
 );
