@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
+import { getProductDetail, mapProducto } from '../services/productDetail.js';
+import { adjustProductStock } from '../services/productStockAdjustment.js';
+import { updateProductGeneral } from '../services/productUpdate.js';
 
 const router = Router();
 
@@ -10,25 +13,6 @@ router.use(requireAuth);
 function toNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : NaN;
-}
-
-function estadoProducto(producto) {
-  if (!producto.activo) return 'desactivado';
-  if (Number(producto.stock_actual) <= 0) return 'agotado';
-  if (Number(producto.stock_actual) <= Number(producto.stock_minimo)) return 'bajo stock';
-  return 'disponible';
-}
-
-function mapProducto(producto) {
-  return {
-    ...producto,
-    precio_compra: Number(producto.precio_compra),
-    precio_venta: Number(producto.precio_venta),
-    stock_actual: Number(producto.stock_actual),
-    stock_minimo: Number(producto.stock_minimo),
-    activo: Boolean(producto.activo),
-    estado: estadoProducto(producto),
-  };
 }
 
 function validarProducto(body) {
@@ -288,6 +272,20 @@ router.get('/mermas', async (req, res, next) => {
   }
 });
 
+router.get('/:id', async (req, res, next) => {
+  try {
+    const result = await getProductDetail({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      queryFn: query,
+    });
+
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/', async (req, res, next) => {
   const parsed = validarProducto(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
@@ -328,49 +326,30 @@ router.post('/', async (req, res, next) => {
 });
 
 router.put('/:id', async (req, res, next) => {
-  const id = Number(req.params.id);
-  const parsed = validarProducto(req.body);
-
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
-  if (parsed.error) return res.status(400).json({ error: parsed.error });
-
   try {
-    const producto = await withTransaction(async (connection) => {
-      const actual = await obtenerProducto(connection, id, req.user.id_usuario);
-      if (!actual) return null;
-
-      await connection.execute(
-        `UPDATE productos
-         SET nombre = ?, categoria = ?, precio_compra = ?, precio_venta = ?, stock_actual = ?, stock_minimo = ?
-         WHERE id_producto = ? AND id_usuario = ?`,
-        [
-          parsed.data.nombre,
-          parsed.data.categoria,
-          parsed.data.precio_compra,
-          parsed.data.precio_venta,
-          parsed.data.stock_actual,
-          parsed.data.stock_minimo,
-          id,
-          req.user.id_usuario,
-        ],
-      );
-
-      if (Number(actual.stock_actual) !== parsed.data.stock_actual) {
-        await registrarMovimiento(connection, {
-          id_producto: id,
-          tipo_movimiento: 'actualizacion_stock',
-          cantidad: Math.abs(parsed.data.stock_actual - Number(actual.stock_actual)),
-          stock_anterior: Number(actual.stock_actual),
-          stock_nuevo: parsed.data.stock_actual,
-          motivo: 'Actualización manual de producto',
-        });
-      }
-
-      return obtenerProducto(connection, id, req.user.id_usuario);
+    const result = await updateProductGeneral({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      body: req.body,
+      withTransactionFn: withTransaction,
     });
 
-    if (!producto) return res.status(404).json({ error: 'Producto no encontrado.' });
-    return res.json(mapProducto(producto));
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/:id/ajustes', async (req, res, next) => {
+  try {
+    const result = await adjustProductStock({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      body: req.body,
+      withTransactionFn: withTransaction,
+    });
+
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }
