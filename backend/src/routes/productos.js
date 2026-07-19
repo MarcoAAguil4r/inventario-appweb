@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
 import { getProductDetail, mapProducto } from '../services/productDetail.js';
 import { adjustProductStock } from '../services/productStockAdjustment.js';
@@ -9,6 +9,7 @@ import { listProductWastes, registerProductWaste } from '../services/productWast
 import { getOperationalSummary } from '../services/operationalSummary.js';
 
 const router = Router();
+const requireAdmin = requireRole('admin');
 
 router.use(requireAuth);
 
@@ -92,7 +93,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/resumen/dia', async (req, res, next) => {
+router.get('/resumen/dia', requireAdmin, async (req, res, next) => {
   try {
     const result = await getOperationalSummary({
       idUsuario: req.user.id_usuario,
@@ -106,7 +107,7 @@ router.get('/resumen/dia', async (req, res, next) => {
   }
 });
 
-router.get('/movimientos/recientes', async (req, res, next) => {
+router.get('/movimientos/recientes', requireAdmin, async (req, res, next) => {
   try {
     const movimientos = await query(
       `SELECT
@@ -143,7 +144,7 @@ router.get('/movimientos/recientes', async (req, res, next) => {
   }
 });
 
-router.get('/:id/movimientos', async (req, res, next) => {
+router.get('/:id/movimientos', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
@@ -183,7 +184,7 @@ router.get('/:id/movimientos', async (req, res, next) => {
   }
 });
 
-router.get('/danados-vendibles', async (req, res, next) => {
+router.get('/danados-vendibles', requireAdmin, async (req, res, next) => {
   try {
     const danados = await query(
       `SELECT
@@ -218,7 +219,7 @@ router.get('/danados-vendibles', async (req, res, next) => {
   }
 });
 
-router.get('/mermas', async (req, res, next) => {
+router.get('/mermas', requireAdmin, async (req, res, next) => {
   try {
     const mermas = await listProductWastes({
       idUsuario: req.user.id_usuario,
@@ -245,7 +246,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   const parsed = validarProducto(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
 
@@ -284,7 +285,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
     const result = await updateProductGeneral({
       idParam: req.params.id,
@@ -299,7 +300,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/:id/ajustes', async (req, res, next) => {
+router.post('/:id/ajustes', requireAdmin, async (req, res, next) => {
   try {
     const result = await adjustProductStock({
       idParam: req.params.id,
@@ -314,7 +315,7 @@ router.post('/:id/ajustes', async (req, res, next) => {
   }
 });
 
-router.post('/:id/danado', async (req, res, next) => {
+router.post('/:id/danado', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioReducido = toNumber(req.body.precio_reducido);
@@ -363,7 +364,7 @@ router.post('/:id/danado', async (req, res, next) => {
   }
 });
 
-router.post('/:id/merma', async (req, res, next) => {
+router.post('/:id/merma', requireAdmin, async (req, res, next) => {
   try {
     const result = await registerProductWaste({
       idParam: req.params.id,
@@ -460,7 +461,7 @@ router.post('/:id/venta', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/desactivar', async (req, res, next) => {
+router.patch('/:id/desactivar', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
   const motivo = String(req.body.motivo ?? 'Producto desactivado').trim();
 

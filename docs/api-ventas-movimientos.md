@@ -290,3 +290,4 @@ Errores comunes:
 | --- | --- |
 | 400 | Fecha invalida |
 | 401 | Token faltante, invalido o expirado |
+| 403 | Usuario autenticado sin rol admin para reportes, mermas, danos o historial |

@@ -282,4 +282,5 @@ Errores comunes:
 | --- | --- |
 | 400 | Datos invalidos o negativos |
 | 401 | Token faltante, invalido o expirado |
+| 403 | Usuario autenticado sin rol admin para operaciones criticas |
 | 404 | Producto no encontrado |

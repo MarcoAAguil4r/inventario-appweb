@@ -4,8 +4,8 @@ import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiRequest, clearSession, getToken } from '@/lib/api';
-import type { Merma, MovimientoInventario, Producto, ProductoDanado, ResumenDia } from '@/lib/api';
+import { apiRequest, clearSession, getStoredUser, getToken } from '@/lib/api';
+import type { Merma, MovimientoInventario, Producto, ProductoDanado, ResumenDia, Usuario } from '@/lib/api';
 
 type ProductoForm = {
   nombre: string;
@@ -34,6 +34,19 @@ type InventorySection =
   | 'mermas'
   | 'historial-producto'
   | 'historial-reciente';
+
+const adminSections = new Set<InventorySection>([
+  'resumen',
+  'registrar',
+  'seleccionado',
+  'ajuste',
+  'dano',
+  'merma',
+  'danados',
+  'mermas',
+  'historial-producto',
+  'historial-reciente',
+]);
 
 const emptyForm: ProductoForm = {
   nombre: '',
@@ -87,11 +100,13 @@ export default function InventarioPage() {
     cantidad: '',
     motivo: '',
   });
-  const [activeSection, setActiveSection] = useState<InventorySection>('resumen');
+  const [activeSection, setActiveSection] = useState<InventorySection>('venta');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentUser] = useState<Usuario | null>(() => getStoredUser());
+  const isAdmin = currentUser?.rol === 'admin';
 
   const activeProducts = useMemo(() => productos.filter((producto) => producto.activo), [productos]);
   const lowStockCount = useMemo(() => productos.filter((producto) => producto.estado === 'bajo stock').length, [productos]);
@@ -143,12 +158,23 @@ export default function InventarioPage() {
     setIsLoading(true);
 
     try {
-      const [productosData, movimientosData, danadosData, mermasData, resumenData] = await Promise.all([
-        apiRequest<Producto[]>('/api/productos'),
-        apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
-        apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
-        apiRequest<Merma[]>('/api/productos/mermas'),
-        apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`),
+      const productosRequest = apiRequest<Producto[]>('/api/productos');
+      const adminRequests = isAdmin
+        ? Promise.all([
+            apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
+            apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
+            apiRequest<Merma[]>('/api/productos/mermas'),
+            apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`),
+          ])
+        : Promise.resolve<[MovimientoInventario[], ProductoDanado[], Merma[], ResumenDia]>([
+            [],
+            [],
+            [],
+            emptyResumen,
+          ]);
+      const [productosData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
+        productosRequest,
+        adminRequests,
       ]);
       setProductos(productosData);
       setMovimientos(movimientosData);
@@ -166,21 +192,20 @@ export default function InventarioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router, summaryDate]);
+  }, [isAdmin, router, summaryDate]);
 
   useEffect(() => {
     if (!getToken()) {
       router.replace('/login');
       return;
     }
-
     queueMicrotask(() => {
       void loadProductos();
     });
   }, [loadProductos, router]);
 
   useEffect(() => {
-    if (!selectedId) {
+    if (!isAdmin || !selectedId) {
       queueMicrotask(() => setProductMovements([]));
       return;
     }
@@ -202,7 +227,7 @@ export default function InventarioPage() {
     return () => {
       ignore = true;
     };
-  }, [selectedId]);
+  }, [isAdmin, selectedId]);
 
   function updateForm(field: keyof ProductoForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -559,7 +584,13 @@ export default function InventarioPage() {
       ],
     },
   ];
-  const menuItems = menuGroups.flatMap((group) => group.items);
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isAdmin || !adminSections.has(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
+  const menuItems = visibleMenuGroups.flatMap((group) => group.items);
   const activeMenuItem = menuItems.find((item) => item.id === activeSection) ?? menuItems[0];
 
   return (
@@ -573,7 +604,7 @@ export default function InventarioPage() {
           </div>
 
           <nav className="mt-8 space-y-6">
-            {menuGroups.map((group) => (
+            {visibleMenuGroups.map((group) => (
               <section key={group.title}>
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
                 <div className="space-y-1.5">

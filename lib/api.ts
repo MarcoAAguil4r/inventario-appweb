@@ -84,6 +84,19 @@ export function saveSession(token: string, usuario: Usuario) {
   window.localStorage.setItem('inventario_usuario', JSON.stringify(usuario));
 }
 
+export function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+
+  const rawUser = window.localStorage.getItem('inventario_usuario');
+  if (!rawUser) return null;
+
+  try {
+    return JSON.parse(rawUser) as Usuario;
+  } catch {
+    return null;
+  }
+}
+
 export function clearSession() {
   window.localStorage.removeItem('inventario_token');
   window.localStorage.removeItem('inventario_usuario');
