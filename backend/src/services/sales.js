@@ -48,6 +48,20 @@ function mapMovimiento(row) {
   };
 }
 
+async function getDetailSaleIdColumn(connection) {
+  const [columns] = await connection.execute(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'detalle_venta'
+       AND COLUMN_NAME IN ('id_detalle_venta', 'id_detalle')
+     ORDER BY FIELD(COLUMN_NAME, 'id_detalle_venta', 'id_detalle')
+     LIMIT 1`,
+  );
+
+  return columns[0]?.COLUMN_NAME ?? 'id_detalle_venta';
+}
+
 export async function createSale({ idUsuario, body, withTransactionFn }) {
   const parsed = validateSalePayload(body);
 
@@ -127,9 +141,10 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
       movimientosIds.push(movementResult.insertId);
     }
 
+    const detailIdColumn = await getDetailSaleIdColumn(connection);
     const [detalle] = await connection.execute(
       `SELECT
-        d.id_detalle_venta,
+        d.${detailIdColumn} AS id_detalle_venta,
         d.id_venta,
         d.id_producto,
         p.nombre AS producto,

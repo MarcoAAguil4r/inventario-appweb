@@ -39,6 +39,10 @@ function createConnection({ rows = products, saleId = 80 } = {}) {
           return [rows.map((product) => ({ ...product, stock_actual: stocks.get(product.id_producto) }))];
         }
 
+        if (/INFORMATION_SCHEMA\.COLUMNS/.test(sql)) {
+          return [[{ COLUMN_NAME: 'id_detalle_venta' }]];
+        }
+
         if (/^INSERT INTO ventas/.test(sql)) {
           return [{ insertId: saleId }];
         }
@@ -78,7 +82,7 @@ function createConnection({ rows = products, saleId = 80 } = {}) {
           return [{ insertId: movementId - 1 }];
         }
 
-        if (/^SELECT\s+d\.id_detalle_venta/.test(sql)) {
+        if (/^SELECT\s+d\.(id_detalle_venta|id_detalle)/.test(sql)) {
           return [detailRows];
         }
 
