@@ -16,6 +16,11 @@ type ProductoForm = {
   stock_minimo: string;
 };
 
+type SaleItem = {
+  id_producto: number;
+  cantidad: number;
+};
+
 type InventorySection =
   | 'resumen'
   | 'productos'
@@ -61,7 +66,8 @@ export default function InventarioPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
-  const [saleForm, setSaleForm] = useState({ cantidad: '', precio_unitario: '', nota: '' });
+  const [saleForm, setSaleForm] = useState({ producto_id: '', cantidad: '', nota: '' });
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<{ tipo: 'entrada' | 'salida'; cantidad: string; motivo: string }>({
     tipo: 'entrada',
     cantidad: '',
@@ -86,12 +92,21 @@ export default function InventarioPage() {
     [productos, selectedId],
   );
   const saleTotal = useMemo(() => {
-    const cantidad = Number(saleForm.cantidad);
-    const precioUnitario = saleForm.precio_unitario === '' ? selectedProduct?.precio_venta : Number(saleForm.precio_unitario);
-
-    if (!Number.isFinite(cantidad) || !Number.isFinite(precioUnitario) || cantidad <= 0) return 0;
-    return cantidad * Number(precioUnitario);
-  }, [saleForm.cantidad, saleForm.precio_unitario, selectedProduct?.precio_venta]);
+    return saleItems.reduce((sum, item) => {
+      const producto = productos.find((current) => current.id_producto === item.id_producto);
+      return sum + item.cantidad * Number(producto?.precio_venta ?? 0);
+    }, 0);
+  }, [productos, saleItems]);
+  const saleItemsDetailed = useMemo(
+    () =>
+      saleItems
+        .map((item) => {
+          const producto = productos.find((current) => current.id_producto === item.id_producto);
+          return producto ? { ...item, producto } : null;
+        })
+        .filter((item): item is SaleItem & { producto: Producto } => Boolean(item)),
+    [productos, saleItems],
+  );
   const loadProductos = useCallback(async () => {
     setError('');
     setIsLoading(true);
@@ -128,12 +143,14 @@ export default function InventarioPage() {
       return;
     }
 
-    loadProductos();
+    queueMicrotask(() => {
+      void loadProductos();
+    });
   }, [loadProductos, router]);
 
   useEffect(() => {
     if (!selectedId) {
-      setProductMovements([]);
+      queueMicrotask(() => setProductMovements([]));
       return;
     }
 
@@ -297,13 +314,73 @@ export default function InventarioPage() {
     }
   }
 
-  async function handleSale(event: FormEvent<HTMLFormElement>) {
+  function addSaleItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedProduct) return;
+    const idProducto = Number(saleForm.producto_id);
+    const cantidad = Number(saleForm.cantidad);
+    const producto = activeProducts.find((item) => item.id_producto === idProducto);
 
-    if (!validateQuantityAgainstStock(saleForm.cantidad)) {
-      setError(`La cantidad no puede ser mayor al stock disponible (${selectedProduct.stock_actual}).`);
+    if (!producto) {
+      setError('Selecciona un producto activo.');
       return;
+    }
+
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      setError('La cantidad debe ser un entero mayor que cero.');
+      return;
+    }
+
+    const currentQuantity = saleItems.find((item) => item.id_producto === idProducto)?.cantidad ?? 0;
+
+    if (currentQuantity + cantidad > producto.stock_actual) {
+      setError(`La cantidad total no puede superar el stock disponible (${producto.stock_actual}).`);
+      return;
+    }
+
+    setSaleItems((current) => {
+      const existing = current.find((item) => item.id_producto === idProducto);
+      if (existing) {
+        return current.map((item) =>
+          item.id_producto === idProducto ? { ...item, cantidad: item.cantidad + cantidad } : item,
+        );
+      }
+
+      return [...current, { id_producto: idProducto, cantidad }];
+    });
+    setSaleForm((current) => ({ ...current, producto_id: '', cantidad: '' }));
+    setError('');
+  }
+
+  function updateSaleItemQuantity(idProducto: number, value: string) {
+    const cantidad = Number(value);
+    const producto = productos.find((item) => item.id_producto === idProducto);
+
+    if (!Number.isInteger(cantidad) || cantidad <= 0 || !producto || cantidad > producto.stock_actual) return;
+
+    setSaleItems((current) =>
+      current.map((item) => (item.id_producto === idProducto ? { ...item, cantidad } : item)),
+    );
+  }
+
+  function removeSaleItem(idProducto: number) {
+    setSaleItems((current) => current.filter((item) => item.id_producto !== idProducto));
+  }
+
+  async function confirmSale() {
+    if (saleItems.length === 0) {
+      setError('La venta debe contener al menos un producto.');
+      return;
+    }
+
+    for (const item of saleItemsDetailed) {
+      if (!item.producto.activo) {
+        setError('Solo pueden venderse productos activos.');
+        return;
+      }
+      if (item.cantidad <= 0 || item.cantidad > item.producto.stock_actual) {
+        setError(`Revisa la cantidad de ${item.producto.nombre}.`);
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -311,16 +388,19 @@ export default function InventarioPage() {
     setStatus('');
 
     try {
-      await apiRequest<{ producto: Producto; total: number }>(`/api/productos/${selectedProduct.id_producto}/venta`, {
+      await apiRequest('/api/ventas', {
         method: 'POST',
         body: JSON.stringify({
-          cantidad: Number(saleForm.cantidad),
-          precio_unitario: saleForm.precio_unitario === '' ? selectedProduct.precio_venta : Number(saleForm.precio_unitario),
+          productos: saleItems.map((item) => ({
+            id_producto: item.id_producto,
+            cantidad: item.cantidad,
+          })),
           nota: saleForm.nota,
         }),
       });
-      setSaleForm({ cantidad: '', precio_unitario: '', nota: '' });
-      setStatus('Venta registrada: el stock se descontó automáticamente.');
+      setSaleItems([]);
+      setSaleForm({ producto_id: '', cantidad: '', nota: '' });
+      setStatus('Venta registrada en una sola operacion.');
       await loadProductos();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo registrar la venta.');
@@ -737,38 +817,92 @@ export default function InventarioPage() {
         )}
 
         {activeSection === 'venta' && (
-          <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
-            <SelectedProductCard product={selectedProduct} />
-            <ActionPanel title="Vender producto" description="Registra una venta y descuenta el stock automáticamente.">
-              <form onSubmit={handleSale} className="grid gap-4">
-                <ProductSelect
-                  label="Producto del inventario"
-                  productos={activeProducts}
-                  value={selectedProduct?.activo ? selectedProduct.id_producto : null}
-                  onChange={(value) => {
-                    setSelectedId(value);
-                    const producto = activeProducts.find((item) => item.id_producto === value);
-                    setSaleForm((current) => ({ ...current, precio_unitario: producto ? String(producto.precio_venta) : '' }));
-                  }}
+          <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+            <ActionPanel title="Agregar productos" description="Selecciona productos activos y consolida cantidades antes de confirmar.">
+              <form onSubmit={addSaleItem} className="grid gap-4">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Producto del inventario</span>
+                  <select
+                    value={saleForm.producto_id}
+                    onChange={(event) => setSaleForm((current) => ({ ...current, producto_id: event.target.value }))}
+                    required
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  >
+                    <option value="">Selecciona un producto</option>
+                    {activeProducts.map((producto) => (
+                      <option key={producto.id_producto} value={producto.id_producto}>
+                        {producto.nombre} - stock {producto.stock_actual}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Field
+                  label="Cantidad"
+                  type="number"
+                  value={saleForm.cantidad}
+                  onChange={(value) => setSaleForm((current) => ({ ...current, cantidad: value }))}
                 />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cantidad vendida" type="number" value={saleForm.cantidad} onChange={(value) => setSaleForm((current) => ({ ...current, cantidad: value }))} />
-                  <Field
-                    label="Precio unitario"
-                    type="number"
-                    value={saleForm.precio_unitario || (selectedProduct ? String(selectedProduct.precio_venta) : '')}
-                    onChange={(value) => setSaleForm((current) => ({ ...current, precio_unitario: value }))}
-                  />
-                </div>
+                <button className="rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-300">
+                  Agregar a la venta
+                </button>
+              </form>
+            </ActionPanel>
+
+            <ActionPanel title="Venta actual" description="Revisa cantidades y confirma la venta en una sola operacion.">
+              <div className="grid gap-4">
+                {saleItemsDetailed.length === 0 ? (
+                  <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                    Agrega al menos un producto para registrar la venta.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full min-w-[620px] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Cantidad</th>
+                          <th className="px-4 py-3">Stock</th>
+                          <th className="px-4 py-3">Subtotal</th>
+                          <th className="px-4 py-3">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {saleItemsDetailed.map((item) => (
+                          <tr key={item.id_producto}>
+                            <td className="px-4 py-3 font-semibold text-slate-950">{item.producto.nombre}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                min="1"
+                                max={item.producto.stock_actual}
+                                value={item.cantidad}
+                                onChange={(event) => updateSaleItemQuantity(item.id_producto, event.target.value)}
+                                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">{item.producto.stock_actual}</td>
+                            <td className="px-4 py-3 text-slate-600">{formatCurrency(item.cantidad * item.producto.precio_venta)}</td>
+                            <td className="px-4 py-3">
+                              <button type="button" onClick={() => removeSaleItem(item.id_producto)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                                Eliminar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Total estimado</p>
                   <p className="mt-1 text-3xl font-black text-slate-950">{formatCurrency(saleTotal)}</p>
                 </div>
                 <Field label="Nota de venta" value={saleForm.nota} onChange={(value) => setSaleForm((current) => ({ ...current, nota: value }))} required={false} />
-                <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-sky-400 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:bg-slate-300">
-                  Registrar venta y descontar stock
+                <button type="button" onClick={confirmSale} disabled={saleItems.length === 0 || isSaving} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">
+                  Confirmar venta
                 </button>
-              </form>
+              </div>
             </ActionPanel>
           </section>
         )}
