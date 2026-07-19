@@ -116,6 +116,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 
   if (!response.ok) {
     if (response.status === 401) {
+      clearSession();
       throw new Error(payload.error ?? 'Tu sesion expiro o no tienes autorizacion.');
     }
 

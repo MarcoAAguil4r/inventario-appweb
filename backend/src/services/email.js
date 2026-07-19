@@ -15,7 +15,6 @@ function requireEmailConfig(recipient) {
 
 export async function sendEmail({ to: recipient, subject, html, text }) {
   const provider = process.env.EMAIL_PROVIDER ?? 'mock';
-  const { from, to } = requireEmailConfig(recipient);
 
   if (!subject || (!html && !text)) {
     const error = new Error('Subject y contenido son requeridos para enviar el correo.');
@@ -24,6 +23,8 @@ export async function sendEmail({ to: recipient, subject, html, text }) {
   }
 
   if (provider === 'mock') {
+    const to = recipient ?? process.env.ALERT_EMAIL_TO ?? 'mock-alert@example.com';
+
     return {
       provider,
       external_id: `mock_${Date.now()}`,
@@ -38,6 +39,8 @@ export async function sendEmail({ to: recipient, subject, html, text }) {
     error.statusCode = 500;
     throw error;
   }
+
+  const { from, to } = requireEmailConfig(recipient);
 
   if (!process.env.RESEND_API_KEY) {
     const error = new Error('RESEND_API_KEY es requerido cuando EMAIL_PROVIDER=resend.');

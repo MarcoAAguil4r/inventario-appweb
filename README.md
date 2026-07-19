@@ -53,7 +53,7 @@ Variables del backend:
 ```env
 DATABASE_URL="mysql://usuario:password@host:3306/inventario"
 JWT_SECRET="cambia-este-secreto-en-produccion"
-CORS_ORIGIN="http://localhost:3000"
+CORS_ORIGIN="http://localhost:3000,https://inventario-appweb-frontend.vercel.app"
 FRONTEND_URL="http://localhost:3000"
 PORT=4000
 ```
@@ -62,7 +62,9 @@ PORT=4000
 
 1. Crea una base de datos MySQL.
 2. Ejecuta el contenido de `backend/src/schema.sql`.
-3. Crea el usuario inicial:
+3. Si ya tienes una base existente y solo quieres registrar las migraciones actuales como aplicadas, usa `npm run migrate:baseline`.
+4. Para aplicar migraciones nuevas despues del esquema inicial, usa `npm run migrate`.
+5. Crea el usuario inicial:
 
 ```bash
 cd backend

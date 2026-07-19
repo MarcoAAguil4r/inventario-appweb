@@ -21,7 +21,7 @@ Authorization: Bearer <token>
 | Metodo | Endpoint | Funcion |
 | --- | --- | --- |
 | POST | `/api/ventas` | Registra una venta con uno o varios productos |
-| POST | `/api/productos/:id/venta` | Registra venta y descuenta stock |
+| POST | `/api/productos/:id/venta` | Legacy: registra venta de un solo producto |
 | POST | `/api/productos/:id/danado` | Registra producto danado vendible |
 | POST | `/api/productos/:id/merma` | Registra perdida o merma |
 | GET | `/api/productos/movimientos/recientes` | Lista movimientos recientes |
@@ -109,7 +109,9 @@ Si una linea no tiene stock suficiente, toda la venta se rechaza y no se descuen
 
 ## POST /api/productos/:id/venta
 
-Registra una venta, calcula el total y descuenta unidades del stock. Si el stock queda menor o igual al minimo, puede disparar una alerta externa por correo.
+Endpoint legacy para compatibilidad con el flujo anterior de un solo producto. Para punto de venta debe usarse
+`POST /api/ventas`, que registra una venta con una o varias lineas en una sola transaccion.
+La respuesta incluye headers `Deprecation`, `Warning` y `Link` apuntando al endpoint sucesor.
 
 Parametros requeridos:
 

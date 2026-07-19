@@ -379,6 +379,10 @@ router.post('/:id/merma', async (req, res, next) => {
 });
 
 router.post('/:id/venta', async (req, res, next) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', '</api/ventas>; rel="successor-version"');
+  res.setHeader('Warning', '299 - "POST /api/productos/:id/venta es legacy; usa POST /api/ventas"');
+
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioUnitario = toNumber(req.body.precio_unitario);
@@ -431,11 +435,23 @@ router.post('/:id/venta', async (req, res, next) => {
     let alerta = null;
 
     if (producto.activo && producto.stock_actual <= producto.stock_minimo) {
-      alerta = await sendInventoryAlert({
-        subject: `Stock bajo: ${producto.nombre}`,
-        text: `El producto ${producto.nombre} quedo con ${producto.stock_actual} unidades. Minimo configurado: ${producto.stock_minimo}.`,
-        html: `<p>El producto <strong>${producto.nombre}</strong> quedo con ${producto.stock_actual} unidades.</p><p>Minimo configurado: ${producto.stock_minimo}.</p>`,
-      });
+      try {
+        alerta = await sendInventoryAlert({
+          subject: `Stock bajo: ${producto.nombre}`,
+          text: `El producto ${producto.nombre} quedo con ${producto.stock_actual} unidades. Minimo configurado: ${producto.stock_minimo}.`,
+          html: `<p>El producto <strong>${producto.nombre}</strong> quedo con ${producto.stock_actual} unidades.</p><p>Minimo configurado: ${producto.stock_minimo}.</p>`,
+        });
+      } catch (alertError) {
+        console.error('[Inventory alert error]', {
+          productId: producto.id_producto,
+          message: alertError.message,
+          code: alertError.code,
+        });
+        alerta = {
+          delivered: false,
+          error: 'No se pudo enviar la alerta de stock bajo.',
+        };
+      }
     }
 
     return res.status(201).json({ producto, total: result.total, alerta });

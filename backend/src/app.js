@@ -7,13 +7,26 @@ import alertasRoutes from './routes/alertas.js';
 import ventasRoutes from './routes/ventas.js';
 
 const app = express();
-const corsOrigin = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:3000';
+const corsOrigins = (process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET is required.');
 }
 
-app.use(cors({ origin: corsOrigin }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Origen no permitido por CORS.'));
+    },
+  }),
+);
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {
@@ -30,6 +43,8 @@ app.use((_req, res) => {
 });
 
 app.use((error, req, res, _next) => {
+  void _next;
+
   const status = error.statusCode ?? error.status ?? 500;
   const isProduction = process.env.NODE_ENV === 'production';
 
