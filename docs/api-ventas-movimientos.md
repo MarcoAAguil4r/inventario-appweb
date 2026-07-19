@@ -20,12 +20,82 @@ Authorization: Bearer <token>
 
 | Metodo | Endpoint | Funcion |
 | --- | --- | --- |
+| POST | `/api/ventas` | Registra una venta con uno o varios productos |
 | POST | `/api/productos/:id/venta` | Registra venta y descuenta stock |
 | POST | `/api/productos/:id/danado` | Registra producto danado vendible |
 | POST | `/api/productos/:id/merma` | Registra perdida o merma |
 | GET | `/api/productos/movimientos/recientes` | Lista movimientos recientes |
 | GET | `/api/productos/:id/movimientos` | Lista movimientos de un producto |
 | GET | `/api/productos/resumen/dia` | Devuelve resumen financiero del dia |
+
+## POST /api/ventas
+
+Registra una venta en una sola transaccion. Consolida productos repetidos, valida pertenencia del usuario, productos activos y stock suficiente antes de modificar existencias.
+
+Parametros requeridos:
+
+| Campo | Ubicacion | Tipo | Requerido | Descripcion |
+| --- | --- | --- | --- | --- |
+| `productos` | body | array | Si | Lineas de productos vendidos |
+| `productos[].id_producto` | body | number | Si | ID del producto |
+| `productos[].cantidad` | body | number | Si | Cantidad entera mayor a 0 |
+| `nota` | body | string | No | Observacion de la venta |
+
+Request:
+
+```json
+{
+  "productos": [
+    {
+      "id_producto": 1,
+      "cantidad": 2
+    },
+    {
+      "id_producto": 5,
+      "cantidad": 1
+    }
+  ],
+  "nota": "Venta mostrador"
+}
+```
+
+Respuesta esperada `201`:
+
+```json
+{
+  "venta": {
+    "id_venta": 80,
+    "total": 150,
+    "nota": "Venta mostrador"
+  },
+  "detalle": [
+    {
+      "id_detalle_venta": 1,
+      "id_venta": 80,
+      "id_producto": 1,
+      "producto": "Cafe",
+      "cantidad": 2,
+      "precio_unitario": 65,
+      "subtotal": 130
+    }
+  ],
+  "movimientos": [
+    {
+      "id_movimiento": 50,
+      "id_producto": 1,
+      "producto": "Cafe",
+      "tipo_movimiento": "venta",
+      "cantidad": 2,
+      "stock_anterior": 10,
+      "stock_nuevo": 8,
+      "motivo": "Venta 80 | subtotal 130.00 | nota: Venta mostrador",
+      "fecha": "2026-07-14T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+Si una linea no tiene stock suficiente, toda la venta se rechaza y no se descuenta ningun producto.
 
 ## POST /api/productos/:id/venta
 

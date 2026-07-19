@@ -29,6 +29,7 @@ Formato:
 | GET | `/api/productos/:id` | Consulta el detalle de un producto del usuario |
 | POST | `/api/productos` | Crea un producto |
 | PUT | `/api/productos/:id` | Actualiza un producto |
+| POST | `/api/productos/:id/ajustes` | Registra entrada o salida manual de stock |
 | PATCH | `/api/productos/:id/desactivar` | Desactiva un producto |
 | GET | `/api/productos/danados-vendibles` | Lista productos danados vendibles |
 | GET | `/api/productos/mermas` | Lista mermas registradas |
@@ -150,7 +151,7 @@ Respuesta esperada `201`:
 
 ## PUT /api/productos/:id
 
-Actualiza los datos principales de un producto. Si cambia el stock, registra un movimiento de actualizacion.
+Actualiza los datos generales de un producto sin modificar el stock actual. Los cambios de stock deben realizarse desde los modulos operativos que registran trazabilidad.
 
 Parametros requeridos:
 
@@ -161,7 +162,6 @@ Parametros requeridos:
 | `categoria` | body | Si | Categoria actualizada |
 | `precio_compra` | body | Si | Costo actualizado |
 | `precio_venta` | body | Si | Precio actualizado |
-| `stock_actual` | body | Si | Stock actualizado |
 | `stock_minimo` | body | Si | Stock minimo actualizado |
 
 Request:
@@ -172,12 +172,67 @@ Request:
   "categoria": "Abarrotes",
   "precio_compra": 42,
   "precio_venta": 68,
-  "stock_actual": 8,
   "stock_minimo": 2
 }
 ```
 
-Respuesta esperada `200`: producto actualizado en formato JSON.
+Respuesta esperada `200`: producto actualizado en formato JSON conservando `stock_actual`.
+
+Si el payload incluye `stock_actual`, la API responde `400` y no modifica el producto.
+
+## POST /api/productos/:id/ajustes
+
+Registra una entrada o salida manual de stock. La actualizacion del producto y el movimiento historico se ejecutan en una transaccion.
+
+Parametros requeridos:
+
+| Parametro | Ubicacion | Requerido | Descripcion |
+| --- | --- | --- | --- |
+| `id` | path | Si | ID numerico del producto |
+| `tipo` | body | Si | `entrada` o `salida` |
+| `cantidad` | body | Si | Entero mayor que cero |
+| `motivo` | body | Si | Motivo del ajuste |
+
+Request:
+
+```json
+{
+  "tipo": "entrada",
+  "cantidad": 10,
+  "motivo": "Correccion por conteo fisico"
+}
+```
+
+Respuesta esperada `201`:
+
+```json
+{
+  "producto": {
+    "id_producto": 10,
+    "nombre": "Cafe",
+    "categoria": "Abarrotes",
+    "precio_compra": 40,
+    "precio_venta": 65,
+    "stock_actual": 30,
+    "stock_minimo": 2,
+    "activo": true,
+    "estado": "disponible"
+  },
+  "movimiento": {
+    "id_movimiento": 50,
+    "id_producto": 10,
+    "producto": "Cafe",
+    "tipo_movimiento": "ajuste_entrada",
+    "cantidad": 10,
+    "stock_anterior": 20,
+    "stock_nuevo": 30,
+    "motivo": "Correccion por conteo fisico",
+    "fecha": "2026-07-14T12:00:00.000Z"
+  }
+}
+```
+
+Para salidas, la API usa `ajuste_salida` y rechaza la operacion si el stock quedaria negativo.
 
 ## PATCH /api/productos/:id/desactivar
 
