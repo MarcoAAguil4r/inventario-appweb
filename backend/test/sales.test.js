@@ -288,6 +288,42 @@ test('lista ventas por fecha con folio, estado, responsable y totales', async ()
   assert.deepEqual(calls.find((call) => /FROM ventas/.test(call.sql)).params, [7, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
 });
 
+test('lista ventas con esquema legacy que usa fecha y no folio', async () => {
+  const calls = [];
+  const result = await listSales({
+    idUsuario: 7,
+    fecha: '2026-07-19',
+    getDayBoundsFn: () => ({ startUtc: '2026-07-19 06:00:00', endUtc: '2026-07-20 06:00:00' }),
+    queryFn: async (sql, params) => {
+      calls.push({ sql, params });
+      if (/INFORMATION_SCHEMA\.COLUMNS/.test(sql)) {
+        return [{ COLUMN_NAME: 'fecha' }, { COLUMN_NAME: 'estado' }];
+      }
+      return [
+        {
+          id_venta: 81,
+          folio: 'VENTA-81',
+          total: '75.00',
+          estado: 'CONFIRMADA',
+          nota: null,
+          creado_en: '2026-07-19T12:00:00.000Z',
+          responsable: 'Marco',
+          total_productos: '1',
+          lineas: '1',
+        },
+      ];
+    },
+  });
+
+  const salesCall = calls.find((call) => /FROM ventas/.test(call.sql));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body[0].folio, 'VENTA-81');
+  assert.match(salesCall.sql, /v\.fecha AS creado_en/);
+  assert.match(salesCall.sql, /CONCAT\('VENTA-', v\.id_venta\) AS folio/);
+  assert.deepEqual(salesCall.params, [7, '2026-07-19 06:00:00', '2026-07-20 06:00:00']);
+});
+
 test('rechaza fecha invalida al listar ventas', async () => {
   const result = await listSales({
     idUsuario: 7,

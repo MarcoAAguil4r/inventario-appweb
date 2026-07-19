@@ -248,20 +248,22 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
 export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
   const params = [idUsuario];
   let dateCondition = '';
-  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado']);
+  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado', 'nota', 'fecha', 'creado_en']);
+  const saleDateColumn = salesColumns.has('fecha') ? 'fecha' : 'creado_en';
   const folioSelect = salesColumns.has('folio')
     ? "COALESCE(v.folio, CONCAT('VENTA-', v.id_venta)) AS folio"
     : "CONCAT('VENTA-', v.id_venta) AS folio";
   const estadoSelect = salesColumns.has('estado')
     ? "COALESCE(v.estado, 'CONFIRMADA') AS estado"
     : "'CONFIRMADA' AS estado";
+  const noteSelect = salesColumns.has('nota') ? 'v.nota' : 'NULL AS nota';
   const groupColumns = [
     'v.id_venta',
     salesColumns.has('folio') ? 'v.folio' : null,
     'v.total',
     salesColumns.has('estado') ? 'v.estado' : null,
-    'v.nota',
-    'v.creado_en',
+    salesColumns.has('nota') ? 'v.nota' : null,
+    `v.${saleDateColumn}`,
     'u.nombre',
   ]
     .filter(Boolean)
@@ -274,7 +276,7 @@ export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
       return { status: 400, body: { error: 'Fecha invalida. Usa formato YYYY-MM-DD.' } };
     }
 
-    dateCondition = 'AND v.creado_en >= ? AND v.creado_en < ?';
+    dateCondition = `AND v.${saleDateColumn} >= ? AND v.${saleDateColumn} < ?`;
     params.push(bounds.startUtc, bounds.endUtc);
   }
 
@@ -284,8 +286,8 @@ export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
       ${folioSelect},
       v.total,
       ${estadoSelect},
-      v.nota,
-      v.creado_en,
+      ${noteSelect},
+      v.${saleDateColumn} AS creado_en,
       u.nombre AS responsable,
       COALESCE(SUM(d.cantidad), 0) AS total_productos,
       COUNT(d.id_producto) AS lineas
@@ -295,7 +297,7 @@ export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
      WHERE v.id_usuario = ?
        ${dateCondition}
      GROUP BY ${groupColumns}
-     ORDER BY v.creado_en DESC, v.id_venta DESC`,
+     ORDER BY v.${saleDateColumn} DESC, v.id_venta DESC`,
     params,
   );
 
@@ -317,14 +319,16 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
     return { status: 400, body: { error: 'Venta invalida.' } };
   }
 
-  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado']);
+  const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado', 'nota', 'fecha', 'creado_en']);
   const detailColumns = await getQueryTableColumns(queryFn, 'detalle_venta', ['id_detalle_venta', 'id_detalle']);
+  const saleDateColumn = salesColumns.has('fecha') ? 'fecha' : 'creado_en';
   const folioSelect = salesColumns.has('folio')
     ? "COALESCE(v.folio, CONCAT('VENTA-', v.id_venta)) AS folio"
     : "CONCAT('VENTA-', v.id_venta) AS folio";
   const estadoSelect = salesColumns.has('estado')
     ? "COALESCE(v.estado, 'CONFIRMADA') AS estado"
     : "'CONFIRMADA' AS estado";
+  const noteSelect = salesColumns.has('nota') ? 'v.nota' : 'NULL AS nota';
   const detailIdColumn = detailColumns.has('id_detalle_venta') ? 'id_detalle_venta' : 'id_detalle';
 
   const sales = await queryFn(
@@ -333,8 +337,8 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
       ${folioSelect},
       v.total,
       ${estadoSelect},
-      v.nota,
-      v.creado_en,
+      ${noteSelect},
+      v.${saleDateColumn} AS creado_en,
       u.nombre AS responsable
      FROM ventas v
      INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
@@ -360,7 +364,7 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
      FROM detalle_venta d
      INNER JOIN productos p ON p.id_producto = d.id_producto
      WHERE d.id_venta = ?
-     ORDER BY d.id_detalle_venta ASC`,
+     ORDER BY d.${detailIdColumn} ASC`,
     [idVenta],
   );
   const movimientos = await queryFn(
