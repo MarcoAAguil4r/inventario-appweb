@@ -21,6 +21,7 @@ type InventorySection =
   | 'productos'
   | 'seleccionado'
   | 'registrar'
+  | 'ajuste'
   | 'venta'
   | 'dano'
   | 'merma'
@@ -61,6 +62,11 @@ export default function InventarioPage() {
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
   const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
   const [saleForm, setSaleForm] = useState({ cantidad: '', precio_unitario: '', nota: '' });
+  const [adjustmentForm, setAdjustmentForm] = useState<{ tipo: 'entrada' | 'salida'; cantidad: string; motivo: string }>({
+    tipo: 'entrada',
+    cantidad: '',
+    motivo: '',
+  });
   const [activeSection, setActiveSection] = useState<InventorySection>('resumen');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -323,6 +329,51 @@ export default function InventarioPage() {
     }
   }
 
+  async function handleStockAdjustment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProduct) return;
+
+    const cantidad = Number(adjustmentForm.cantidad);
+
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      setError('La cantidad debe ser un entero mayor que cero.');
+      return;
+    }
+
+    if (!adjustmentForm.motivo.trim()) {
+      setError('El motivo es requerido.');
+      return;
+    }
+
+    if (adjustmentForm.tipo === 'salida' && cantidad > selectedProduct.stock_actual) {
+      setError(`La salida no puede ser mayor al stock disponible (${selectedProduct.stock_actual}).`);
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      await apiRequest<{ producto: Producto; movimiento: MovimientoInventario }>(`/api/productos/${selectedProduct.id_producto}/ajustes`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tipo: adjustmentForm.tipo,
+          cantidad,
+          motivo: adjustmentForm.motivo,
+        }),
+      });
+      setAdjustmentForm({ tipo: 'entrada', cantidad: '', motivo: '' });
+      setStatus('Ajuste manual registrado con movimiento historico.');
+      await loadProductos();
+      setActiveSection('historial-producto');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo registrar el ajuste de stock.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleDisable(producto: Producto) {
     const confirmed = window.confirm(`¿Seguro que quieres desactivar "${producto.nombre}"? Se conservará su historial.`);
 
@@ -365,6 +416,7 @@ export default function InventarioPage() {
         { id: 'productos', label: 'Productos', description: 'Inventario actual' },
         { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición' },
         { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
+        { id: 'ajuste', label: 'Ajustar stock', description: 'Entrada o salida manual' },
         { id: 'venta', label: 'Vender producto', description: 'Salida por venta' },
       ],
     },
@@ -496,6 +548,7 @@ export default function InventarioPage() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
+                  <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
                   <QuickAction title="Vender producto" description="Descuenta stock por venta." onClick={() => setActiveSection('venta')} />
                   <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
                 </div>
@@ -632,12 +685,54 @@ export default function InventarioPage() {
               <h2 className="mt-2 text-2xl font-bold text-slate-950">Acciones para este producto</h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
+                <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
                 <QuickAction title="Vender producto" description="Descontar unidades vendidas." onClick={() => setActiveSection('venta')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
               </div>
             </section>
+          </section>
+        )}
+
+        {activeSection === 'ajuste' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
+            <SelectedProductCard product={selectedProduct} />
+            <ActionPanel title="Ajuste manual de stock" description="Registra una entrada o salida manual con motivo y trazabilidad.">
+              <form onSubmit={handleStockAdjustment} className="grid gap-4">
+                <ProductSelect
+                  label="Producto del inventario"
+                  productos={productos}
+                  value={selectedProduct?.id_producto ?? null}
+                  onChange={setSelectedId}
+                />
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Tipo de ajuste</span>
+                  <select
+                    value={adjustmentForm.tipo}
+                    onChange={(event) => setAdjustmentForm((current) => ({ ...current, tipo: event.target.value as 'entrada' | 'salida' }))}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  >
+                    <option value="entrada">Entrada</option>
+                    <option value="salida">Salida</option>
+                  </select>
+                </label>
+                <Field
+                  label="Cantidad"
+                  type="number"
+                  value={adjustmentForm.cantidad}
+                  onChange={(value) => setAdjustmentForm((current) => ({ ...current, cantidad: value }))}
+                />
+                <Field
+                  label="Motivo"
+                  value={adjustmentForm.motivo}
+                  onChange={(value) => setAdjustmentForm((current) => ({ ...current, motivo: value }))}
+                />
+                <button disabled={!selectedProduct || isSaving} className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">
+                  Registrar ajuste
+                </button>
+              </form>
+            </ActionPanel>
           </section>
         )}
 
@@ -1117,6 +1212,8 @@ function formatMovementType(type: string) {
   const labels: Record<string, string> = {
     registro_inicial: 'Registro inicial',
     actualizacion_stock: 'Actualización de stock',
+    ajuste_entrada: 'Ajuste entrada',
+    ajuste_salida: 'Ajuste salida',
     venta: 'Venta',
     producto_danado_vendible: 'Producto dañado',
     merma: 'Merma',

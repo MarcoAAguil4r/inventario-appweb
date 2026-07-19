@@ -3,6 +3,7 @@ import { query, withTransaction } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
 import { getProductDetail, mapProducto } from '../services/productDetail.js';
+import { adjustProductStock } from '../services/productStockAdjustment.js';
 import { updateProductGeneral } from '../services/productUpdate.js';
 
 const router = Router();
@@ -327,6 +328,21 @@ router.post('/', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const result = await updateProductGeneral({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      body: req.body,
+      withTransactionFn: withTransaction,
+    });
+
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/:id/ajustes', async (req, res, next) => {
+  try {
+    const result = await adjustProductStock({
       idParam: req.params.id,
       idUsuario: req.user.id_usuario,
       body: req.body,
