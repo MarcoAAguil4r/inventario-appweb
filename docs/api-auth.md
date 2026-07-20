@@ -24,10 +24,14 @@ Formato:
 | POST | `/api/auth/login` | Autentica usuario y devuelve JWT |
 | POST | `/api/auth/forgot-password` | Solicita correo de recuperacion |
 | POST | `/api/auth/reset-password` | Restablece contrasena con token |
+| GET | `/api/usuarios` | Lista usuarios del negocio, solo propietario |
+| POST | `/api/usuarios` | Crea encargado o vendedor, solo propietario |
+| PATCH | `/api/usuarios/:id/rol` | Cambia rol operativo, solo propietario |
+| PATCH | `/api/usuarios/:id/estado` | Activa o desactiva usuario, solo propietario |
 
 ## POST /api/auth/register
 
-Registra un usuario activo con rol `admin`.
+Registra al dueno del negocio con rol `propietario`. Los usuarios operativos se crean despues desde el panel del propietario.
 
 Parametros requeridos:
 
@@ -58,7 +62,8 @@ Respuesta esperada `201`:
     "id_usuario": 1,
     "nombre": "Admin",
     "correo": "admin@example.com",
-    "rol": "admin"
+    "rol": "propietario",
+    "id_propietario": 1
   }
 }
 ```
@@ -92,10 +97,43 @@ Respuesta esperada `200`:
     "id_usuario": 1,
     "nombre": "Admin",
     "correo": "admin@example.com",
-    "rol": "admin"
+    "rol": "propietario",
+    "id_propietario": 1
   }
 }
 ```
+
+## GET /api/usuarios
+
+Lista el propietario y los usuarios operativos del negocio autenticado. Requiere rol `propietario`.
+
+## POST /api/usuarios
+
+Crea un usuario operativo del negocio. Requiere rol `propietario`; el cliente no puede crear otro propietario.
+
+Request:
+
+```json
+{
+  "nombre": "Cajero",
+  "correo": "cajero@example.com",
+  "password": "Password123",
+  "rol": "vendedor"
+}
+```
+
+Roles permitidos:
+
+- `encargado`
+- `vendedor`
+
+## PATCH /api/usuarios/:id/rol
+
+Cambia el rol de un usuario operativo a `encargado` o `vendedor`. No permite modificar el rol del propietario.
+
+## PATCH /api/usuarios/:id/estado
+
+Activa o desactiva un usuario operativo sin borrar su historial.
 
 ## POST /api/auth/forgot-password
 

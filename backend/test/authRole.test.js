@@ -18,7 +18,7 @@ function createResponse() {
 }
 
 test('permite continuar cuando el usuario tiene rol admin', () => {
-  const middleware = requireRole('admin');
+  const middleware = requireRole('propietario');
   const req = { user: { rol: 'admin' } };
   const res = createResponse();
   let nextCalled = false;
@@ -32,7 +32,7 @@ test('permite continuar cuando el usuario tiene rol admin', () => {
 });
 
 test('rechaza usuarios autenticados sin el rol requerido', () => {
-  const middleware = requireRole('admin');
+  const middleware = requireRole('propietario');
   const req = { user: { rol: 'vendedor' } };
   const res = createResponse();
   let nextCalled = false;
@@ -47,7 +47,7 @@ test('rechaza usuarios autenticados sin el rol requerido', () => {
 });
 
 test('rechaza solicitudes sin usuario cargado', () => {
-  const middleware = requireRole('admin');
+  const middleware = requireRole('propietario');
   const req = {};
   const res = createResponse();
   let nextCalled = false;

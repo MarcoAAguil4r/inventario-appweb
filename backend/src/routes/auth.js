@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { query, withTransaction } from '../db.js';
 import { createPasswordResetRateLimiter } from '../middleware/passwordResetRateLimit.js';
 import { sendEmail } from '../services/email.js';
+import { getBusinessOwnerId, normalizeRole, ROLES } from '../services/roles.js';
 
 const router = Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,11 +40,14 @@ function validatePassword(password, confirmPassword) {
 }
 
 function createAuthResponse(usuario) {
+  const rol = normalizeRole(usuario.rol);
+  const idPropietario = getBusinessOwnerId(usuario);
   const token = jwt.sign(
     {
       id_usuario: usuario.id_usuario,
       correo: usuario.correo,
-      rol: usuario.rol,
+      rol,
+      id_propietario: idPropietario,
     },
     process.env.JWT_SECRET,
     { expiresIn: '8h' },
@@ -55,7 +59,8 @@ function createAuthResponse(usuario) {
       id_usuario: usuario.id_usuario,
       nombre: usuario.nombre,
       correo: usuario.correo,
-      rol: usuario.rol,
+      rol,
+      id_propietario: idPropietario,
     },
   };
 }
@@ -87,14 +92,16 @@ router.post('/register', async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await query(
       'INSERT INTO usuarios (nombre, correo, password_hash, rol, activo) VALUES (?, ?, ?, ?, true)',
-      [nombre, correo, passwordHash, 'admin'],
+      [nombre, correo, passwordHash, ROLES.PROPIETARIO],
     );
+    await query('UPDATE usuarios SET id_propietario = ? WHERE id_usuario = ?', [result.insertId, result.insertId]);
 
     const usuario = {
       id_usuario: result.insertId,
       nombre,
       correo,
-      rol: 'admin',
+      rol: ROLES.PROPIETARIO,
+      id_propietario: result.insertId,
     };
 
     return res.status(201).json(createAuthResponse(usuario));
@@ -113,7 +120,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const usuarios = await query(
-      'SELECT id_usuario, nombre, correo, password_hash, rol, activo FROM usuarios WHERE correo = ? LIMIT 1',
+      'SELECT id_usuario, nombre, correo, password_hash, rol, activo, id_propietario FROM usuarios WHERE correo = ? LIMIT 1',
       [correo],
     );
     const usuario = usuarios[0];

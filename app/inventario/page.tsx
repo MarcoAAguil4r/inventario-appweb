@@ -30,8 +30,16 @@ type SaleItem = {
   cantidad: number;
 };
 
+type UserForm = {
+  nombre: string;
+  correo: string;
+  password: string;
+  rol: 'encargado' | 'vendedor';
+};
+
 type InventorySection =
   | 'resumen'
+  | 'usuarios'
   | 'productos'
   | 'seleccionado'
   | 'registrar'
@@ -45,18 +53,85 @@ type InventorySection =
   | 'historial-producto'
   | 'historial-reciente';
 
-const adminSections = new Set<InventorySection>([
-  'resumen',
-  'registrar',
-  'seleccionado',
-  'ajuste',
-  'dano',
-  'merma',
-  'danados',
-  'mermas',
-  'historial-producto',
-  'historial-reciente',
-]);
+type Permission =
+  | 'reports:view'
+  | 'users:manage'
+  | 'products:view'
+  | 'products:create'
+  | 'products:edit'
+  | 'products:disable'
+  | 'stock:adjust'
+  | 'waste:create'
+  | 'waste:view'
+  | 'damaged-products:manage'
+  | 'movements:view'
+  | 'sales:create'
+  | 'sales:view-own'
+  | 'sales:cancel';
+
+const rolePermissions: Record<string, Set<Permission>> = {
+  propietario: new Set([
+    'reports:view',
+    'users:manage',
+    'products:view',
+    'products:create',
+    'products:edit',
+    'products:disable',
+    'stock:adjust',
+    'waste:create',
+    'waste:view',
+    'damaged-products:manage',
+    'movements:view',
+    'sales:create',
+    'sales:view-own',
+    'sales:cancel',
+  ]),
+  admin: new Set([
+    'reports:view',
+    'users:manage',
+    'products:view',
+    'products:create',
+    'products:edit',
+    'products:disable',
+    'stock:adjust',
+    'waste:create',
+    'waste:view',
+    'damaged-products:manage',
+    'movements:view',
+    'sales:create',
+    'sales:view-own',
+    'sales:cancel',
+  ]),
+  encargado: new Set([
+    'products:view',
+    'products:create',
+    'products:edit',
+    'products:disable',
+    'stock:adjust',
+    'waste:create',
+    'waste:view',
+    'damaged-products:manage',
+    'movements:view',
+  ]),
+  vendedor: new Set(['products:view', 'sales:create', 'sales:view-own']),
+};
+
+const sectionPermissions: Record<InventorySection, Permission | null> = {
+  resumen: 'reports:view',
+  usuarios: 'users:manage',
+  productos: 'products:view',
+  seleccionado: 'products:view',
+  registrar: 'products:create',
+  ajuste: 'stock:adjust',
+  venta: 'sales:create',
+  ventas: 'sales:view-own',
+  dano: 'damaged-products:manage',
+  merma: 'waste:create',
+  danados: 'damaged-products:manage',
+  mermas: 'waste:view',
+  'historial-producto': 'movements:view',
+  'historial-reciente': 'movements:view',
+};
 
 const emptyForm: ProductoForm = {
   nombre: '',
@@ -98,6 +173,8 @@ export default function InventarioPage() {
   const [resumenDia, setResumenDia] = useState<ResumenDia>(emptyResumen);
   const [ventas, setVentas] = useState<VentaResumen[]>([]);
   const [selectedSale, setSelectedSale] = useState<VentaDetalle | null>(null);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [userForm, setUserForm] = useState<UserForm>({ nombre: '', correo: '', password: '', rol: 'vendedor' });
   const [summaryDate, setSummaryDate] = useState(todayInputValue);
   const [salesDate, setSalesDate] = useState(todayInputValue);
   const [statusFilter, setStatusFilter] = useState<'todos' | Producto['estado']>('todos');
@@ -120,7 +197,9 @@ export default function InventarioPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser] = useState<Usuario | null>(() => getStoredUser());
-  const isAdmin = currentUser?.rol === 'admin';
+  const currentRole = currentUser?.rol ?? 'vendedor';
+  const permissions = rolePermissions[currentRole] ?? rolePermissions.vendedor;
+  const can = useCallback((permission: Permission) => permissions.has(permission), [permissions]);
 
   const activeProducts = useMemo(() => productos.filter((producto) => producto.activo), [productos]);
   const lowStockCount = useMemo(() => productos.filter((producto) => producto.estado === 'bajo stock').length, [productos]);
@@ -183,12 +262,14 @@ export default function InventarioPage() {
 
     try {
       const productosRequest = apiRequest<Producto[]>('/api/productos');
-      const adminRequests = isAdmin
+      const adminRequests = can('reports:view') || can('movements:view') || can('waste:view') || can('damaged-products:manage')
         ? Promise.all([
-            apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
-            apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
-            apiRequest<Merma[]>('/api/productos/mermas'),
-            apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`),
+            can('movements:view') ? apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes') : Promise.resolve([]),
+            can('damaged-products:manage') ? apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles') : Promise.resolve([]),
+            can('waste:view') ? apiRequest<Merma[]>('/api/productos/mermas') : Promise.resolve([]),
+            can('reports:view')
+              ? apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`)
+              : Promise.resolve(emptyResumen),
           ])
         : Promise.resolve<[MovimientoInventario[], ProductoDanado[], Merma[], ResumenDia]>([
             [],
@@ -196,14 +277,19 @@ export default function InventarioPage() {
             [],
             emptyResumen,
           ]);
-      const ventasRequest = apiRequest<VentaResumen[]>(`/api/ventas?fecha=${encodeURIComponent(salesDate)}`);
-      const [productosData, ventasData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
+      const ventasRequest = can('sales:view-own')
+        ? apiRequest<VentaResumen[]>(`/api/ventas?fecha=${encodeURIComponent(salesDate)}`)
+        : Promise.resolve([]);
+      const usersRequest = can('users:manage') ? apiRequest<Usuario[]>('/api/usuarios') : Promise.resolve([]);
+      const [productosData, ventasData, usuariosData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
         productosRequest,
         ventasRequest,
+        usersRequest,
         adminRequests,
       ]);
       setProductos(productosData);
       setVentas(ventasData);
+      setUsuarios(usuariosData);
       setMovimientos(movimientosData);
       setProductosDanados(danadosData);
       setMermas(mermasData);
@@ -219,7 +305,7 @@ export default function InventarioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, router, salesDate, summaryDate]);
+  }, [can, router, salesDate, summaryDate]);
 
   useEffect(() => {
     if (!getToken()) {
@@ -232,7 +318,7 @@ export default function InventarioPage() {
   }, [loadProductos, router]);
 
   useEffect(() => {
-    if (!isAdmin || !selectedId) {
+    if (!can('movements:view') || !selectedId) {
       queueMicrotask(() => setProductMovements([]));
       return;
     }
@@ -254,7 +340,7 @@ export default function InventarioPage() {
     return () => {
       ignore = true;
     };
-  }, [isAdmin, selectedId]);
+  }, [can, selectedId]);
 
   function updateForm(field: keyof ProductoForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -607,6 +693,65 @@ export default function InventarioPage() {
     }
   }
 
+  async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const usuario = await apiRequest<Usuario>('/api/usuarios', {
+        method: 'POST',
+        body: JSON.stringify(userForm),
+      });
+      setUserForm({ nombre: '', correo: '', password: '', rol: 'vendedor' });
+      setUsuarios((current) => [...current, usuario]);
+      setStatus(`Usuario ${usuario.nombre} creado como ${usuario.rol_label ?? usuario.rol}.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo crear el usuario.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function updateUserRole(idUsuario: number, rol: 'encargado' | 'vendedor') {
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const usuario = await apiRequest<Usuario>(`/api/usuarios/${idUsuario}/rol`, {
+        method: 'PATCH',
+        body: JSON.stringify({ rol }),
+      });
+      setUsuarios((current) => current.map((item) => (item.id_usuario === idUsuario ? usuario : item)));
+      setStatus(`Rol actualizado para ${usuario.nombre}.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar el rol.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function updateUserStatus(idUsuario: number, activo: boolean) {
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const usuario = await apiRequest<Usuario>(`/api/usuarios/${idUsuario}/estado`, {
+        method: 'PATCH',
+        body: JSON.stringify({ activo }),
+      });
+      setUsuarios((current) => current.map((item) => (item.id_usuario === idUsuario ? usuario : item)));
+      setStatus(activo ? `Usuario ${usuario.nombre} activado.` : `Usuario ${usuario.nombre} desactivado.`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo actualizar el usuario.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   function logout() {
     clearSession();
     router.replace('/login');
@@ -618,7 +763,10 @@ export default function InventarioPage() {
   }> = [
     {
       title: 'Panel',
-      items: [{ id: 'resumen', label: 'Vista general', description: 'Resumen y acciones rápidas' }],
+      items: [
+        { id: 'resumen', label: 'Vista general', description: 'Resumen y acciones rápidas' },
+        { id: 'usuarios', label: 'Usuarios', description: 'Roles del negocio' },
+      ],
     },
     {
       title: 'Catálogo',
@@ -656,11 +804,15 @@ export default function InventarioPage() {
   const visibleMenuGroups = menuGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => isAdmin || !adminSections.has(item.id)),
+      items: group.items.filter((item) => {
+        const permission = sectionPermissions[item.id];
+        return !permission || can(permission);
+      }),
     }))
     .filter((group) => group.items.length > 0);
   const menuItems = visibleMenuGroups.flatMap((group) => group.items);
-  const activeMenuItem = menuItems.find((item) => item.id === activeSection) ?? menuItems[0];
+  const renderedSection = menuItems.some((item) => item.id === activeSection) ? activeSection : menuItems[0]?.id;
+  const activeMenuItem = menuItems.find((item) => item.id === renderedSection) ?? menuItems[0];
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-950">
@@ -683,13 +835,13 @@ export default function InventarioPage() {
                       type="button"
                       onClick={() => setActiveSection(item.id)}
                       className={`w-full rounded-xl px-3.5 py-3 text-left transition ${
-                        activeSection === item.id
+                        renderedSection === item.id
                           ? 'bg-sky-400 text-slate-950 shadow-lg shadow-sky-500/20'
                           : 'text-slate-300 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       <span className="block text-sm font-extrabold">{item.label}</span>
-                      <span className={`mt-0.5 block text-xs ${activeSection === item.id ? 'text-slate-800' : 'text-slate-500'}`}>
+                      <span className={`mt-0.5 block text-xs ${renderedSection === item.id ? 'text-slate-800' : 'text-slate-500'}`}>
                         {item.description}
                       </span>
                     </button>
@@ -722,7 +874,7 @@ export default function InventarioPage() {
                 <p className="mt-1 text-sm text-slate-500">{activeMenuItem.description}</p>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700">
-                <span className="h-2 w-2 rounded-full bg-sky-500" /> Administrador
+                <span className="h-2 w-2 rounded-full bg-sky-500" /> {currentRole === 'admin' ? 'Propietario' : currentRole}
               </div>
             </div>
           </header>
@@ -735,7 +887,7 @@ export default function InventarioPage() {
               </section>
             )}
 
-        {activeSection === 'resumen' && (
+        {renderedSection === 'resumen' && (
           <section className="mt-6 space-y-5">
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5">
               <label className="block max-w-xs">
@@ -782,12 +934,12 @@ export default function InventarioPage() {
                   </button>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
+                  {can('products:create') && <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />}
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
-                  <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                  <QuickAction title="Punto de venta" description="Registra varios productos en un ticket." onClick={() => setActiveSection('venta')} />
-                  <QuickAction title="Historial de ventas" description="Detalle y cancelacion." onClick={() => setActiveSection('ventas')} />
-                  <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
+                  {can('stock:adjust') && <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />}
+                  {can('sales:create') && <QuickAction title="Punto de venta" description="Registra varios productos en un ticket." onClick={() => setActiveSection('venta')} />}
+                  {can('sales:view-own') && <QuickAction title="Historial de ventas" description="Detalle y cancelacion." onClick={() => setActiveSection('ventas')} />}
+                  {can('damaged-products:manage') && <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />}
                 </div>
               </section>
 
@@ -800,7 +952,112 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'productos' && (
+        {renderedSection === 'usuarios' && (
+          <section className="mt-6 grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <form onSubmit={handleCreateUser} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/5">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Nuevo usuario</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-950">Agregar al negocio</h2>
+              <div className="mt-5 grid gap-4">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Nombre</span>
+                  <input
+                    value={userForm.nombre}
+                    onChange={(event) => setUserForm((current) => ({ ...current, nombre: event.target.value }))}
+                    required
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    placeholder="Nombre del empleado"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Correo</span>
+                  <input
+                    value={userForm.correo}
+                    onChange={(event) => setUserForm((current) => ({ ...current, correo: event.target.value }))}
+                    type="email"
+                    required
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    placeholder="empleado@negocio.com"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Password temporal</span>
+                  <input
+                    value={userForm.password}
+                    onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
+                    type="password"
+                    required
+                    minLength={8}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                    placeholder="Minimo 8 caracteres"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Rol</span>
+                  <select
+                    value={userForm.rol}
+                    onChange={(event) =>
+                      setUserForm((current) => ({ ...current, rol: event.target.value as UserForm['rol'] }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  >
+                    <option value="vendedor">Vendedor</option>
+                    <option value="encargado">Encargado</option>
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  Crear usuario
+                </button>
+              </div>
+            </form>
+
+            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
+              <div className="border-b border-slate-200 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Equipo</p>
+                <h2 className="mt-2 text-2xl font-bold text-slate-950">Roles y accesos</h2>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {usuarios.map((usuario) => {
+                  const isOwner = usuario.rol === 'propietario' || usuario.rol === 'admin';
+                  return (
+                    <article key={usuario.id_usuario} className="grid gap-4 p-5 lg:grid-cols-[1fr_180px_140px] lg:items-center">
+                      <div>
+                        <p className="font-bold text-slate-950">{usuario.nombre}</p>
+                        <p className="mt-1 text-sm text-slate-500">{usuario.correo}</p>
+                        <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                          {usuario.activo === false ? 'Inactivo' : 'Activo'}
+                        </p>
+                      </div>
+                      <select
+                        value={isOwner ? 'propietario' : usuario.rol}
+                        disabled={isOwner || isSaving}
+                        onChange={(event) => updateUserRole(usuario.id_usuario, event.target.value as UserForm['rol'])}
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                      >
+                        <option value="propietario">Propietario</option>
+                        <option value="encargado">Encargado</option>
+                        <option value="vendedor">Vendedor</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={isOwner || isSaving}
+                        onClick={() => updateUserStatus(usuario.id_usuario, !(usuario.activo ?? true))}
+                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {usuario.activo === false ? 'Activar' : 'Desactivar'}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </section>
+        )}
+
+        {renderedSection === 'productos' && (
           <section className="mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-950/5">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -809,9 +1066,11 @@ export default function InventarioPage() {
               </div>
 
               <div className="flex flex-col gap-3 sm:items-end">
-                <button onClick={() => setActiveSection('registrar')} className="rounded-xl bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-sky-300">
-                  Nuevo producto
-                </button>
+                {can('products:create') && (
+                  <button onClick={() => setActiveSection('registrar')} className="rounded-xl bg-sky-400 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-sky-300">
+                    Nuevo producto
+                  </button>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {[
                     ['todos', 'Todos'],
@@ -877,10 +1136,12 @@ export default function InventarioPage() {
                             >
                               Ver detalle
                             </Link>
-                            <button onClick={() => startEdit(producto)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
-                              Editar
-                            </button>
-                            {producto.activo && (
+                            {can('products:edit') && (
+                              <button onClick={() => startEdit(producto)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
+                                Editar
+                              </button>
+                            )}
+                            {can('products:disable') && producto.activo && (
                               <button onClick={() => handleDisable(producto)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                                 Desactivar
                               </button>
@@ -896,7 +1157,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'registrar' && (
+        {renderedSection === 'registrar' && (
           <section className="mt-6 max-w-3xl">
             <ProductFormPanel
               editingId={editingId}
@@ -909,7 +1170,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'seleccionado' && (
+        {renderedSection === 'seleccionado' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
             <SelectedProductCard product={selectedProduct}>
               <button onClick={() => setActiveSection('productos')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
@@ -921,19 +1182,19 @@ export default function InventarioPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Operaciones</p>
               <h2 className="mt-2 text-2xl font-bold text-slate-950">Acciones para este producto</h2>
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
-                <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                <QuickAction title="Punto de venta" description="Armar ticket con varios productos." onClick={() => setActiveSection('venta')} disabled={activeProducts.length === 0} />
-                <QuickAction title="Ver ventas" description="Historial y cancelaciones." onClick={() => setActiveSection('ventas')} />
-                <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
-                <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
-                <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
+                {can('products:edit') && <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />}
+                {can('stock:adjust') && <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />}
+                {can('sales:create') && <QuickAction title="Punto de venta" description="Armar ticket con varios productos." onClick={() => setActiveSection('venta')} disabled={activeProducts.length === 0} />}
+                {can('sales:view-own') && <QuickAction title="Ver ventas" description="Historial y cancelaciones." onClick={() => setActiveSection('ventas')} />}
+                {can('damaged-products:manage') && <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />}
+                {can('waste:create') && <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />}
+                {can('movements:view') && <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />}
               </div>
             </section>
           </section>
         )}
 
-        {activeSection === 'ajuste' && (
+        {renderedSection === 'ajuste' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
             <SelectedProductCard product={selectedProduct} />
             <ActionPanel title="Ajuste manual de stock" description="Registra una entrada o salida manual con motivo y trazabilidad.">
@@ -976,7 +1237,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'venta' && (
+        {renderedSection === 'venta' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <ActionPanel title="Punto de venta" description="Agrega productos activos al mismo ticket y confirma una sola venta.">
               <form onSubmit={addSaleItem} className="grid gap-4">
@@ -1112,7 +1373,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'ventas' && (
+        {renderedSection === 'ventas' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
             <DataTablePanel
               title="Historial de ventas"
@@ -1161,7 +1422,7 @@ export default function InventarioPage() {
                           <button type="button" onClick={() => loadSaleDetail(venta.id_venta)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
                             Ver detalle
                           </button>
-                          {venta.estado !== 'CANCELADA' && (
+                          {can('sales:cancel') && venta.estado !== 'CANCELADA' && (
                             <button type="button" onClick={() => cancelSelectedSale(venta)} disabled={isSaving} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
                               Cancelar
                             </button>
@@ -1227,7 +1488,7 @@ export default function InventarioPage() {
                       ))
                     )}
                   </div>
-                  {selectedSale.estado !== 'CANCELADA' && (
+                  {can('sales:cancel') && selectedSale.estado !== 'CANCELADA' && (
                     <button type="button" onClick={() => cancelSelectedSale(selectedSale)} disabled={isSaving} className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
                       Cancelar venta y devolver stock
                     </button>
@@ -1238,7 +1499,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'dano' && (
+        {renderedSection === 'dano' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
             <SelectedProductCard product={selectedProduct} />
             <ActionPanel title="Daño leve" description="Usa esta opción cuando el producto todavía puede venderse con precio reducido.">
@@ -1262,7 +1523,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'merma' && (
+        {renderedSection === 'merma' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
             <SelectedProductCard product={selectedProduct} />
             <ActionPanel title="Merma" description="Usa esta opción cuando el producto ya no puede venderse y debe salir del inventario.">
@@ -1286,7 +1547,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'danados' && (
+        {renderedSection === 'danados' && (
           <section className="mt-6">
             <DataTablePanel
               title="Productos dañados vendibles"
@@ -1324,7 +1585,7 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'mermas' && (
+        {renderedSection === 'mermas' && (
           <section className="mt-6">
             <DataTablePanel
               title="Pérdidas / mermas"
@@ -1358,13 +1619,13 @@ export default function InventarioPage() {
           </section>
         )}
 
-        {activeSection === 'historial-producto' && (
+        {renderedSection === 'historial-producto' && (
           <section className="mt-6">
             <TracePanel title="Historial del producto" subtitle={selectedProduct?.nombre ?? 'Selecciona un producto'} rows={productMovements} />
           </section>
         )}
 
-        {activeSection === 'historial-reciente' && (
+        {renderedSection === 'historial-reciente' && (
           <section className="mt-6">
             <TracePanel title="Historial reciente" subtitle="Últimos 12 movimientos registrados" rows={movimientos} />
           </section>

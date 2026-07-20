@@ -31,7 +31,7 @@ export function validateStockAdjustment(body) {
   };
 }
 
-export async function adjustProductStock({ idParam, idUsuario, body, withTransactionFn }) {
+export async function adjustProductStock({ idParam, idUsuario, responsibleUserId = idUsuario, body, withTransactionFn }) {
   const id = Number(idParam);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -81,9 +81,9 @@ export async function adjustProductStock({ idParam, idUsuario, body, withTransac
     const tipoMovimiento = parsed.data.tipo === 'entrada' ? 'ajuste_entrada' : 'ajuste_salida';
     const [movementResult] = await connection.execute(
       `INSERT INTO movimientos_inventario
-        (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, tipoMovimiento, parsed.data.cantidad, stockAnterior, stockNuevo, parsed.data.motivo],
+        (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, id_usuario)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, tipoMovimiento, parsed.data.cantidad, stockAnterior, stockNuevo, parsed.data.motivo, responsibleUserId],
     );
 
     const [productosActualizados] = await connection.execute(

@@ -1,55 +1,50 @@
-# Modo crisis: control de permisos por rol
+# Modo crisis: roles operativos por negocio
 
 ## Cambio solicitado
 
-Se implemento un cambio importante de control de acceso: el rol `admin` ahora protege operaciones criticas del inventario. Los usuarios autenticados que no sean `admin` pueden consultar productos y registrar ventas, pero no pueden modificar inventario sensible.
+Se implemento un cambio importante de control de acceso: el dueno se registra como `propietario` y desde el panel puede crear usuarios del negocio con rol `encargado` o `vendedor`.
 
 ## Impacto tecnico
 
-- Se agrego middleware reusable de autorizacion por rol en el backend.
-- Las rutas criticas de productos ahora responden `403 Forbidden` cuando el JWT no contiene el rol requerido.
-- El frontend lee el usuario guardado y oculta opciones administrativas a roles no-admin.
-- La carga inicial del inventario evita consultar endpoints administrativos cuando el usuario no es admin.
-- El punto de venta se conserva disponible para usuarios autenticados.
+- Se agrego `id_propietario` en `usuarios` para agrupar el equipo del negocio dentro del MVP.
+- El JWT incluye `id_propietario` y el backend usa ese valor para consultar el inventario compartido del negocio.
+- Las ventas, mermas, ajustes y movimientos conservan el `id_usuario` responsable real.
+- El frontend muestra secciones y acciones segun permisos, no solo segun el nombre del rol.
+- Los usuarios legacy con rol `admin` se normalizan como `propietario`.
 
 ## Decisiones tomadas
 
-- `admin` queda como rol requerido para altas, ediciones, ajustes, mermas, productos danados, reportes e historial.
-- `POST /api/ventas` se mantiene disponible para cualquier usuario autenticado porque el flujo operativo de ventas no debe bloquearse.
-- El registro actual sigue creando usuarios con rol `admin`, para no romper el comportamiento existente del MVP.
-- La respuesta para falta de permisos usa `403`, porque el usuario esta autenticado pero no autorizado.
+- `propietario`: todo, reportes, usuarios, cancelar ventas y ajustar stock.
+- `encargado`: registrar/editar productos, ajustar stock, registrar merma y consultar inventario.
+- `vendedor`: ver productos activos, registrar ventas y ver sus ventas.
+- El panel del propietario solo permite crear/asignar `encargado` y `vendedor`; no permite crear otro propietario.
+- El registro publico crea al dueno como `propietario`; los empleados se crean desde el panel.
 
 ## Que se modifico
 
-- `backend/src/middleware/auth.js`: se agrego `requireRole`.
-- `backend/src/routes/productos.js`: se aplico `requireRole('admin')` a operaciones criticas.
-- `app/inventario/page.tsx`: se ocultaron opciones administrativas para usuarios no-admin y se evitan llamadas protegidas.
-- `lib/api.ts`: se agrego lectura segura del usuario guardado.
-- `backend/test/authRole.test.js`: se agregaron pruebas del middleware de rol.
+- `backend/src/services/roles.js`: mapa formal de roles, permisos y compatibilidad `admin` -> `propietario`.
+- `backend/src/routes/usuarios.js`: endpoints para listar, crear, cambiar rol y activar/desactivar usuarios del negocio.
+- `backend/src/routes/productos.js`: permisos por operacion e inventario consultado por propietario.
+- `backend/src/routes/ventas.js` y `backend/src/services/sales.js`: vendedor ve sus ventas; propietario ve el equipo y puede cancelar.
+- `app/inventario/page.tsx`: se agrego seccion `Usuarios` y filtrado de menu/acciones por permisos.
+- `backend/src/migrations/20260720_add_user_owner_and_roles.sql`: migracion para `id_propietario` y roles legacy.
 
 ## Que no se modifico
 
-- No se cambio la estructura de la tabla `usuarios`, porque ya existe la columna `rol`.
-- No se agrego CRUD de usuarios.
-- No se cambio el flujo de login ni el formato del JWT.
-- No se bloqueo el punto de venta para usuarios no-admin.
-- No se eliminaron endpoints legacy, solo se mantiene compatibilidad.
+- No se creo una tabla separada `comercios`; el MVP usa `usuarios.id_propietario` como agrupador del negocio.
+- No se agrego recuperacion/cambio de password para empleados desde el panel.
+- No se permite que un empleado elija o eleve su propio rol.
+- No se borran usuarios; se activan o desactivan para conservar historial.
 
 ## Trade-offs
 
-- Se gana seguridad y separacion de responsabilidades con bajo riesgo.
-- Todavia no hay administracion visual de usuarios; los roles deben asignarse desde base de datos o futuras pantallas.
-- El frontend oculta opciones, pero la proteccion real esta en backend.
-- Mantener el registro como `admin` evita romper el MVP, aunque en produccion real convendria crear usuarios nuevos con rol operativo por defecto.
+- Usar `id_propietario` es mas simple y seguro para el MVP que introducir una entidad `comercios` completa en este punto.
+- La solucion permite operar por negocio sin migrar todas las tablas a `id_comercio`, pero una version multi-sucursal formal deberia agregar esa tabla.
+- El frontend mejora la experiencia, pero la seguridad real queda en backend con permisos.
 
 ## Evidencia tecnica
 
-- Pruebas backend:
-  - `requireRole('admin')` permite usuarios admin.
-  - `requireRole('admin')` rechaza usuarios con rol diferente.
-  - `requireRole('admin')` rechaza solicitudes sin usuario.
-- Validaciones ejecutadas:
-  - `npm --prefix backend test`
-  - `npx tsc --noEmit`
-  - `npx eslint ...`
-  - `npm run build`
+- `npm --prefix backend test`: 58/58 pruebas pasando.
+- `npx tsc --noEmit`: sin errores.
+- `npx eslint app/inventario/page.tsx app/registro/page.tsx lib/api.ts backend/src backend/test`: sin errores.
+- `npm run build`: build de Next.js correcto.

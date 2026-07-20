@@ -101,7 +101,7 @@ test('registra entrada aumentando stock y generando movimiento historico', async
   assert.equal(result.body.movimiento.stock_anterior, 20);
   assert.equal(result.body.movimiento.stock_nuevo, 30);
   assert.deepEqual(updateCall.params, [30, 10, 7]);
-  assert.deepEqual(insertCall.params, [10, 'ajuste_entrada', 10, 20, 30, 'Correccion por conteo fisico']);
+  assert.deepEqual(insertCall.params, [10, 'ajuste_entrada', 10, 20, 30, 'Correccion por conteo fisico', 7]);
 });
 
 test('registra salida disminuyendo stock', async () => {

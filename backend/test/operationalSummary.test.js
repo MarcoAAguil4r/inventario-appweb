@@ -91,7 +91,7 @@ test('consulta solo ventas confirmadas y aisla por usuario autenticado', async (
   const lossesCall = calls.find((call) => /FROM mermas/.test(call.sql));
 
   assert.match(salesCall.sql, /v\.estado = 'CONFIRMADA'/);
-  assert.deepEqual(salesCall.params, [22, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
+  assert.deepEqual(salesCall.params, [22, 22, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
   assert.deepEqual(lossesCall.params, [22, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
 });
 

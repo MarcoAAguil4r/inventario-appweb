@@ -84,11 +84,12 @@ export async function getOperationalSummary({ idUsuario, fecha, queryFn, now = n
   const [ventasRow = {}] = await queryFn(
     `SELECT COALESCE(SUM(v.total), 0) AS ventas_confirmadas
      FROM ventas v
-     WHERE v.id_usuario = ?
+     INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
+     WHERE (u.id_usuario = ? OR u.id_propietario = ?)
        ${salesStatusCondition}
        AND v.${salesDateColumn} >= ?
        AND v.${salesDateColumn} < ?`,
-    [idUsuario, bounds.startUtc, bounds.endUtc],
+    [idUsuario, idUsuario, bounds.startUtc, bounds.endUtc],
   );
   const [perdidasRow = {}] = await queryFn(
     `SELECT COALESCE(SUM(m.costo_perdida), 0) AS perdidas

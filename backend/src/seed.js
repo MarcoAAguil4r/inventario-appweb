@@ -16,10 +16,11 @@ if (existing.length > 0) {
 
 const passwordHash = await bcrypt.hash(password, 12);
 
-await query(
+const result = await query(
   'INSERT INTO usuarios (nombre, correo, password_hash, rol, activo) VALUES (?, ?, ?, ?, true)',
-  [nombre, correo, passwordHash, 'admin'],
+  [nombre, correo, passwordHash, 'propietario'],
 );
+await query('UPDATE usuarios SET id_propietario = ? WHERE id_usuario = ?', [result.insertId, result.insertId]);
 
 console.log(`Seed user created: ${correo}`);
 await pool.end();

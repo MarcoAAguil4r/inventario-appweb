@@ -89,7 +89,7 @@ async function getDetailSaleIdColumn(connection) {
   return columns.has('id_detalle_venta') ? 'id_detalle_venta' : 'id_detalle';
 }
 
-export async function createSale({ idUsuario, body, withTransactionFn }) {
+export async function createSale({ idUsuario, responsibleUserId = idUsuario, body, withTransactionFn }) {
   const parsed = validateSalePayload(body);
 
   if (parsed.error) {
@@ -130,7 +130,7 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
 
     const salesColumns = await getTableColumns(connection, 'ventas', ['folio', 'nota', 'estado']);
     const insertColumns = ['id_usuario', 'total'];
-    const insertValues = [idUsuario, total];
+    const insertValues = [responsibleUserId, total];
 
     if (salesColumns.has('folio')) {
       insertColumns.push('folio');
@@ -179,9 +179,9 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
         .join(' | ');
       const [movementResult] = await connection.execute(
         `INSERT INTO movimientos_inventario
-          (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [item.id_producto, 'venta', item.cantidad, stockAnterior, stockNuevo, motivo],
+          (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, id_usuario)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [item.id_producto, 'venta', item.cantidad, stockAnterior, stockNuevo, motivo, responsibleUserId],
       );
 
       movimientosIds.push(movementResult.insertId);
@@ -245,8 +245,8 @@ export async function createSale({ idUsuario, body, withTransactionFn }) {
   });
 }
 
-export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
-  const params = [idUsuario];
+export async function listSales({ idUsuario, ownerId = idUsuario, includeAllUsers = false, fecha, queryFn, getDayBoundsFn }) {
+  const params = includeAllUsers ? [ownerId, ownerId] : [idUsuario, idUsuario, ownerId];
   let dateCondition = '';
   const salesColumns = await getQueryTableColumns(queryFn, 'ventas', ['folio', 'estado', 'nota', 'fecha', 'creado_en']);
   const saleDateColumn = salesColumns.has('fecha') ? 'fecha' : 'creado_en';
@@ -294,7 +294,7 @@ export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
      FROM ventas v
      INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
      LEFT JOIN detalle_venta d ON d.id_venta = v.id_venta
-     WHERE v.id_usuario = ?
+     WHERE ${includeAllUsers ? '(u.id_usuario = ? OR u.id_propietario = ?)' : 'v.id_usuario = ? AND (u.id_usuario = ? OR u.id_propietario = ?)'}
        ${dateCondition}
      GROUP BY ${groupColumns}
      ORDER BY v.${saleDateColumn} DESC, v.id_venta DESC`,
@@ -312,7 +312,7 @@ export async function listSales({ idUsuario, fecha, queryFn, getDayBoundsFn }) {
   };
 }
 
-export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
+export async function getSaleDetail({ idUsuario, ownerId = idUsuario, includeAllUsers = false, idParam, queryFn }) {
   const idVenta = parseInteger(idParam);
 
   if (Number.isNaN(idVenta) || idVenta <= 0) {
@@ -342,9 +342,10 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
       u.nombre AS responsable
      FROM ventas v
      INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
-     WHERE v.id_venta = ? AND v.id_usuario = ?
+     WHERE v.id_venta = ?
+       AND ${includeAllUsers ? '(u.id_usuario = ? OR u.id_propietario = ?)' : 'v.id_usuario = ? AND (u.id_usuario = ? OR u.id_propietario = ?)'}
      LIMIT 1`,
-    [idVenta, idUsuario],
+    includeAllUsers ? [idVenta, ownerId, ownerId] : [idVenta, idUsuario, idUsuario, ownerId],
   );
   const venta = sales[0];
 
@@ -386,7 +387,7 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
      WHERE p.id_usuario = ?
        AND (m.motivo LIKE ? OR m.motivo LIKE ?)
      ORDER BY m.fecha ASC, m.id_movimiento ASC`,
-    [idUsuario, `Venta ${idVenta}%`, `Cancelacion venta ${idVenta}%`],
+    [ownerId, `Venta ${idVenta}%`, `Cancelacion venta ${idVenta}%`],
   );
 
   return {
@@ -405,21 +406,27 @@ export async function getSaleDetail({ idUsuario, idParam, queryFn }) {
   };
 }
 
-export async function cancelSale({ idUsuario, idParam, body = {}, withTransactionFn }) {
+export async function cancelSale({ idUsuario, responsibleUserId = idUsuario, canCancel = true, idParam, body = {}, withTransactionFn }) {
   const idVenta = parseInteger(idParam);
 
   if (Number.isNaN(idVenta) || idVenta <= 0) {
     return { status: 400, body: { error: 'Venta invalida.' } };
   }
 
+  if (!canCancel) {
+    return { status: 403, body: { error: 'No tienes permisos para cancelar ventas.' } };
+  }
+
   return withTransactionFn(async (connection) => {
     const [sales] = await connection.execute(
-      `SELECT id_venta, total, nota, COALESCE(estado, 'CONFIRMADA') AS estado
-       FROM ventas
-       WHERE id_venta = ? AND id_usuario = ?
+      `SELECT v.id_venta, v.total, v.nota, COALESCE(v.estado, 'CONFIRMADA') AS estado
+       FROM ventas v
+       INNER JOIN usuarios u ON u.id_usuario = v.id_usuario
+       WHERE v.id_venta = ?
+         AND (u.id_usuario = ? OR u.id_propietario = ?)
        LIMIT 1
        FOR UPDATE`,
-      [idVenta, idUsuario],
+      [idVenta, idUsuario, idUsuario],
     );
     const venta = sales[0];
 
@@ -448,8 +455,8 @@ export async function cancelSale({ idUsuario, idParam, body = {}, withTransactio
     const motivo = [`Cancelacion venta ${idVenta}`, motivoUsuario].filter(Boolean).join(' | ');
 
     await connection.execute(
-      "UPDATE ventas SET estado = 'CANCELADA' WHERE id_venta = ? AND id_usuario = ?",
-      [idVenta, idUsuario],
+      "UPDATE ventas SET estado = 'CANCELADA' WHERE id_venta = ?",
+      [idVenta],
     );
 
     for (const detalle of detalles) {
@@ -464,7 +471,7 @@ export async function cancelSale({ idUsuario, idParam, body = {}, withTransactio
         `INSERT INTO movimientos_inventario
           (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, id_usuario)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [detalle.id_producto, 'cancelacion_venta', Number(detalle.cantidad), stockAnterior, stockNuevo, motivo, idUsuario],
+        [detalle.id_producto, 'cancelacion_venta', Number(detalle.cantidad), stockAnterior, stockNuevo, motivo, responsibleUserId],
       );
     }
 

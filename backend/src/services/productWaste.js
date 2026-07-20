@@ -98,7 +98,7 @@ export async function listProductWastes({ idUsuario, queryFn }) {
   return mermas.map(mapWaste);
 }
 
-export async function registerProductWaste({ idParam, idUsuario, body, withTransactionFn }) {
+export async function registerProductWaste({ idParam, idUsuario, responsibleUserId = idUsuario, body, withTransactionFn }) {
   const id = Number(idParam);
 
   if (!Number.isInteger(id) || id <= 0) {
@@ -140,11 +140,11 @@ export async function registerProductWaste({ idParam, idUsuario, body, withTrans
     );
     await connection.execute(
       'INSERT INTO mermas (id_producto, id_usuario, cantidad, motivo, costo_perdida) VALUES (?, ?, ?, ?, ?)',
-      [id, idUsuario, parsed.data.cantidad, parsed.data.motivo, costoPerdida],
+      [id, responsibleUserId, parsed.data.cantidad, parsed.data.motivo, costoPerdida],
     );
     await insertInventoryMovement(connection, {
       id_producto: id,
-      id_usuario: idUsuario,
+      id_usuario: responsibleUserId,
       tipo_movimiento: 'merma',
       cantidad: parsed.data.cantidad,
       stock_anterior: stockAnterior,

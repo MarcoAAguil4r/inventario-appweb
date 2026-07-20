@@ -1,11 +1,15 @@
 CREATE TABLE IF NOT EXISTS usuarios (
   id_usuario INT AUTO_INCREMENT PRIMARY KEY,
+  id_propietario INT NULL,
   nombre VARCHAR(120) NOT NULL,
   correo VARCHAR(180) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  rol VARCHAR(50) NOT NULL DEFAULT 'admin',
+  rol VARCHAR(50) NOT NULL DEFAULT 'propietario',
   activo BOOLEAN NOT NULL DEFAULT TRUE,
-  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  creado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_usuarios_propietario (id_propietario),
+  CONSTRAINT fk_usuarios_propietario
+    FOREIGN KEY (id_propietario) REFERENCES usuarios(id_usuario)
 );
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

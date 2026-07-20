@@ -48,7 +48,7 @@ async function run() {
         .filter(Boolean);
 
       for (const statement of statements) {
-        await connection.execute(statement);
+        await connection.query(statement);
       }
 
       await markMigration(connection, file);

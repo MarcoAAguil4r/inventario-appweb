@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
 import { getProductDetail, mapProducto } from '../services/productDetail.js';
 import { adjustProductStock } from '../services/productStockAdjustment.js';
 import { updateProductGeneral } from '../services/productUpdate.js';
 import { listProductWastes, registerProductWaste } from '../services/productWaste.js';
 import { getOperationalSummary } from '../services/operationalSummary.js';
+import { getBusinessOwnerId, hasPermission, PERMISSIONS } from '../services/roles.js';
 
 const router = Router();
-const requireAdmin = requireRole('admin');
 
 router.use(requireAuth);
 
@@ -83,9 +83,14 @@ async function registrarMovimiento(connection, movimiento) {
 
 router.get('/', async (req, res, next) => {
   try {
+    const ownerId = getBusinessOwnerId(req.user);
+    const onlyActive = !hasPermission(req.user.rol, PERMISSIONS.PRODUCTS_EDIT);
     const productos = await query(
-      'SELECT * FROM productos WHERE id_usuario = ? ORDER BY activo DESC, nombre ASC',
-      [req.user.id_usuario],
+      `SELECT * FROM productos
+       WHERE id_usuario = ?
+         ${onlyActive ? 'AND activo = true' : ''}
+       ORDER BY activo DESC, nombre ASC`,
+      [ownerId],
     );
     return res.json(productos.map(mapProducto));
   } catch (error) {
@@ -93,10 +98,10 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/resumen/dia', requireAdmin, async (req, res, next) => {
+router.get('/resumen/dia', requirePermission(PERMISSIONS.REPORTS_VIEW), async (req, res, next) => {
   try {
     const result = await getOperationalSummary({
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
       fecha: req.query.fecha,
       queryFn: query,
     });
@@ -107,8 +112,9 @@ router.get('/resumen/dia', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.get('/movimientos/recientes', requireAdmin, async (req, res, next) => {
+router.get('/movimientos/recientes', requirePermission(PERMISSIONS.MOVEMENTS_VIEW), async (req, res, next) => {
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const movimientos = await query(
       `SELECT
         m.id_movimiento,
@@ -128,7 +134,7 @@ router.get('/movimientos/recientes', requireAdmin, async (req, res, next) => {
       WHERE p.id_usuario = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC
       LIMIT 12`,
-      [req.user.id_usuario],
+      [ownerId],
     );
 
     return res.json(
@@ -144,12 +150,13 @@ router.get('/movimientos/recientes', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.get('/:id/movimientos', requireAdmin, async (req, res, next) => {
+router.get('/:id/movimientos', requirePermission(PERMISSIONS.MOVEMENTS_VIEW), async (req, res, next) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
 
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const movimientos = await query(
       `SELECT
         m.id_movimiento,
@@ -168,7 +175,7 @@ router.get('/:id/movimientos', requireAdmin, async (req, res, next) => {
       LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
       WHERE p.id_usuario = ? AND m.id_producto = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC`,
-      [req.user.id_usuario, id],
+      [ownerId, id],
     );
 
     return res.json(
@@ -184,8 +191,9 @@ router.get('/:id/movimientos', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.get('/danados-vendibles', requireAdmin, async (req, res, next) => {
+router.get('/danados-vendibles', requirePermission(PERMISSIONS.DAMAGED_PRODUCTS_MANAGE), async (req, res, next) => {
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const danados = await query(
       `SELECT
         d.id_producto_danado,
@@ -202,7 +210,7 @@ router.get('/danados-vendibles', requireAdmin, async (req, res, next) => {
       WHERE p.id_usuario = ? AND d.vendible = true
       ORDER BY d.creado_en DESC, d.id_producto_danado DESC
       LIMIT 20`,
-      [req.user.id_usuario],
+      [ownerId],
     );
 
     return res.json(
@@ -219,10 +227,10 @@ router.get('/danados-vendibles', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.get('/mermas', requireAdmin, async (req, res, next) => {
+router.get('/mermas', requirePermission(PERMISSIONS.WASTE_VIEW), async (req, res, next) => {
   try {
     const mermas = await listProductWastes({
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
       queryFn: query,
     });
 
@@ -236,7 +244,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const result = await getProductDetail({
       idParam: req.params.id,
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
       queryFn: query,
     });
 
@@ -246,18 +254,19 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', requireAdmin, async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.PRODUCTS_CREATE), async (req, res, next) => {
   const parsed = validarProducto(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
 
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const producto = await withTransaction(async (connection) => {
       const [result] = await connection.execute(
         `INSERT INTO productos
           (id_usuario, nombre, categoria, precio_compra, precio_venta, stock_actual, stock_minimo)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
-          req.user.id_usuario,
+          ownerId,
           parsed.data.nombre,
           parsed.data.categoria,
           parsed.data.precio_compra,
@@ -269,6 +278,7 @@ router.post('/', requireAdmin, async (req, res, next) => {
 
       await registrarMovimiento(connection, {
         id_producto: result.insertId,
+        id_usuario: req.user.id_usuario,
         tipo_movimiento: 'registro_inicial',
         cantidad: parsed.data.stock_actual,
         stock_anterior: 0,
@@ -276,7 +286,7 @@ router.post('/', requireAdmin, async (req, res, next) => {
         motivo: 'Registro inicial de producto',
       });
 
-      return obtenerProducto(connection, result.insertId, req.user.id_usuario);
+      return obtenerProducto(connection, result.insertId, ownerId);
     });
 
     return res.status(201).json(mapProducto(producto));
@@ -285,11 +295,11 @@ router.post('/', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.put('/:id', requireAdmin, async (req, res, next) => {
+router.put('/:id', requirePermission(PERMISSIONS.PRODUCTS_EDIT), async (req, res, next) => {
   try {
     const result = await updateProductGeneral({
       idParam: req.params.id,
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
       body: req.body,
       withTransactionFn: withTransaction,
     });
@@ -300,11 +310,12 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/:id/ajustes', requireAdmin, async (req, res, next) => {
+router.post('/:id/ajustes', requirePermission(PERMISSIONS.STOCK_ADJUST), async (req, res, next) => {
   try {
     const result = await adjustProductStock({
       idParam: req.params.id,
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
+      responsibleUserId: req.user.id_usuario,
       body: req.body,
       withTransactionFn: withTransaction,
     });
@@ -315,7 +326,7 @@ router.post('/:id/ajustes', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/:id/danado', requireAdmin, async (req, res, next) => {
+router.post('/:id/danado', requirePermission(PERMISSIONS.DAMAGED_PRODUCTS_MANAGE), async (req, res, next) => {
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioReducido = toNumber(req.body.precio_reducido);
@@ -326,8 +337,9 @@ router.post('/:id/danado', requireAdmin, async (req, res, next) => {
   }
 
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const result = await withTransaction(async (connection) => {
-      const producto = await obtenerProducto(connection, id, req.user.id_usuario);
+      const producto = await obtenerProducto(connection, id, ownerId);
       if (!producto) return { status: 404, error: 'Producto no encontrado.' };
       if (!producto.activo) return { status: 400, error: 'No se puede modificar un producto desactivado.' };
       if (Number(producto.stock_actual) < cantidad) return { status: 400, error: 'Stock insuficiente.' };
@@ -337,7 +349,7 @@ router.post('/:id/danado', requireAdmin, async (req, res, next) => {
       await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
         stockNuevo,
         id,
-        req.user.id_usuario,
+        ownerId,
       ]);
       await connection.execute(
         `INSERT INTO productos_danados
@@ -347,6 +359,7 @@ router.post('/:id/danado', requireAdmin, async (req, res, next) => {
       );
       await registrarMovimiento(connection, {
         id_producto: id,
+        id_usuario: req.user.id_usuario,
         tipo_movimiento: 'producto_danado_vendible',
         cantidad,
         stock_anterior: Number(producto.stock_actual),
@@ -354,7 +367,7 @@ router.post('/:id/danado', requireAdmin, async (req, res, next) => {
         motivo: descripcion,
       });
 
-      return { producto: await obtenerProducto(connection, id, req.user.id_usuario) };
+      return { producto: await obtenerProducto(connection, id, ownerId) };
     });
 
     if (result.error) return res.status(result.status).json({ error: result.error });
@@ -364,11 +377,12 @@ router.post('/:id/danado', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/:id/merma', requireAdmin, async (req, res, next) => {
+router.post('/:id/merma', requirePermission(PERMISSIONS.WASTE_CREATE), async (req, res, next) => {
   try {
     const result = await registerProductWaste({
       idParam: req.params.id,
-      idUsuario: req.user.id_usuario,
+      idUsuario: getBusinessOwnerId(req.user),
+      responsibleUserId: req.user.id_usuario,
       body: req.body,
       withTransactionFn: withTransaction,
     });
@@ -379,7 +393,7 @@ router.post('/:id/merma', requireAdmin, async (req, res, next) => {
   }
 });
 
-router.post('/:id/venta', async (req, res, next) => {
+router.post('/:id/venta', requirePermission(PERMISSIONS.SALES_CREATE), async (req, res, next) => {
   res.setHeader('Deprecation', 'true');
   res.setHeader('Link', '</api/ventas>; rel="successor-version"');
   res.setHeader('Warning', '299 - "POST /api/productos/:id/venta es legacy; usa POST /api/ventas"');
@@ -394,8 +408,9 @@ router.post('/:id/venta', async (req, res, next) => {
   }
 
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const result = await withTransaction(async (connection) => {
-      const producto = await obtenerProducto(connection, id, req.user.id_usuario);
+      const producto = await obtenerProducto(connection, id, ownerId);
       if (!producto) return { status: 404, error: 'Producto no encontrado.' };
       if (!producto.activo) return { status: 400, error: 'No se puede vender un producto desactivado.' };
       if (Number(producto.stock_actual) < cantidad) return { status: 400, error: 'Stock insuficiente para completar la venta.' };
@@ -415,11 +430,12 @@ router.post('/:id/venta', async (req, res, next) => {
       await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
         stockNuevo,
         id,
-        req.user.id_usuario,
+        ownerId,
       ]);
 
       await registrarMovimiento(connection, {
         id_producto: id,
+        id_usuario: req.user.id_usuario,
         tipo_movimiento: 'venta',
         cantidad,
         stock_anterior: Number(producto.stock_actual),
@@ -427,7 +443,7 @@ router.post('/:id/venta', async (req, res, next) => {
         motivo,
       });
 
-      return { producto: await obtenerProducto(connection, id, req.user.id_usuario), total };
+      return { producto: await obtenerProducto(connection, id, ownerId), total };
     });
 
     if (result.error) return res.status(result.status).json({ error: result.error });
@@ -461,23 +477,25 @@ router.post('/:id/venta', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/desactivar', requireAdmin, async (req, res, next) => {
+router.patch('/:id/desactivar', requirePermission(PERMISSIONS.PRODUCTS_DISABLE), async (req, res, next) => {
   const id = Number(req.params.id);
   const motivo = String(req.body.motivo ?? 'Producto desactivado').trim();
 
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
 
   try {
+    const ownerId = getBusinessOwnerId(req.user);
     const producto = await withTransaction(async (connection) => {
-      const actual = await obtenerProducto(connection, id, req.user.id_usuario);
+      const actual = await obtenerProducto(connection, id, ownerId);
       if (!actual) return null;
 
       await connection.execute('UPDATE productos SET activo = false WHERE id_producto = ? AND id_usuario = ?', [
         id,
-        req.user.id_usuario,
+        ownerId,
       ]);
       await registrarMovimiento(connection, {
         id_producto: id,
+        id_usuario: req.user.id_usuario,
         tipo_movimiento: 'desactivacion',
         cantidad: 0,
         stock_anterior: Number(actual.stock_actual),
@@ -485,7 +503,7 @@ router.patch('/:id/desactivar', requireAdmin, async (req, res, next) => {
         motivo,
       });
 
-      return obtenerProducto(connection, id, req.user.id_usuario);
+      return obtenerProducto(connection, id, ownerId);
     });
 
     if (!producto) return res.status(404).json({ error: 'Producto no encontrado.' });

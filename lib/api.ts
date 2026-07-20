@@ -12,9 +12,13 @@ export type Producto = {
 
 export type Usuario = {
   id_usuario: number;
+  id_propietario?: number;
   nombre: string;
   correo: string;
-  rol: string;
+  rol: 'propietario' | 'encargado' | 'vendedor' | string;
+  rol_label?: string;
+  activo?: boolean;
+  creado_en?: string;
 };
 
 export type LoginResponse = {

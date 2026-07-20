@@ -285,7 +285,7 @@ test('lista ventas por fecha con folio, estado, responsable y totales', async ()
   assert.equal(result.body[0].total, 150);
   assert.equal(result.body[0].total_productos, 3);
   assert.equal(result.body[0].lineas, 2);
-  assert.deepEqual(calls.find((call) => /FROM ventas/.test(call.sql)).params, [7, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
+  assert.deepEqual(calls.find((call) => /FROM ventas/.test(call.sql)).params, [7, 7, 7, '2026-07-15 06:00:00', '2026-07-16 06:00:00']);
 });
 
 test('lista ventas con esquema legacy que usa fecha y no folio', async () => {
@@ -321,7 +321,7 @@ test('lista ventas con esquema legacy que usa fecha y no folio', async () => {
   assert.equal(result.body[0].folio, 'VENTA-81');
   assert.match(salesCall.sql, /v\.fecha AS creado_en/);
   assert.match(salesCall.sql, /CONCAT\('VENTA-', v\.id_venta\) AS folio/);
-  assert.deepEqual(salesCall.params, [7, '2026-07-19 06:00:00', '2026-07-20 06:00:00']);
+  assert.deepEqual(salesCall.params, [7, 7, 7, '2026-07-19 06:00:00', '2026-07-20 06:00:00']);
 });
 
 test('rechaza fecha invalida al listar ventas', async () => {
