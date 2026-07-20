@@ -9,7 +9,7 @@ import type { Producto } from '@/lib/api';
 export default function ProductoDetallePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const productId = useMemo(() => String(params.id ?? '').trim(), [params.id]);
+  const productId = useMemo(() => String(params?.id ?? '').trim(), [params?.id]);
   const [producto, setProducto] = useState<Producto | null>(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -17,6 +17,14 @@ export default function ProductoDetallePage() {
   useEffect(() => {
     if (!getToken()) {
       router.replace('/login');
+      return;
+    }
+
+    if (!productId) {
+      queueMicrotask(() => {
+        setError('Producto invalido.');
+        setIsLoading(false);
+      });
       return;
     }
 

@@ -15,3 +15,17 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Token invalido o expirado.' });
   }
 }
+
+export function requireRole(...allowedRoles) {
+  const roles = new Set(allowedRoles);
+
+  return function roleMiddleware(req, res, next) {
+    const userRole = req.user?.rol;
+
+    if (!userRole || !roles.has(userRole)) {
+      return res.status(403).json({ error: 'No tienes permisos para realizar esta accion.' });
+    }
+
+    return next();
+  };
+}

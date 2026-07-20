@@ -272,9 +272,9 @@ Respuesta esperada `200`: arreglo JSON con productos danados, cantidad, precio r
 
 ## GET /api/productos/mermas
 
-Lista mermas registradas para productos del usuario.
+Lista mermas registradas para productos del usuario. Incluye el responsable historico de cada perdida.
 
-Respuesta esperada `200`: arreglo JSON con producto, cantidad, motivo, costo de perdida y fecha.
+Respuesta esperada `200`: arreglo JSON con producto, cantidad, motivo, costo de perdida, `id_usuario`, `responsable` y fecha.
 
 Errores comunes:
 
@@ -282,4 +282,5 @@ Errores comunes:
 | --- | --- |
 | 400 | Datos invalidos o negativos |
 | 401 | Token faltante, invalido o expirado |
+| 403 | Usuario autenticado sin rol admin para operaciones criticas |
 | 404 | Producto no encontrado |

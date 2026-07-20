@@ -28,6 +28,10 @@ export function validateProductUpdate(body) {
     return { error: 'Precios y stock minimo deben ser numeros mayores o iguales a cero.' };
   }
 
+  if (!Number.isInteger(stockMinimo)) {
+    return { error: 'El stock minimo debe ser un numero entero.' };
+  }
+
   return {
     data: {
       nombre,

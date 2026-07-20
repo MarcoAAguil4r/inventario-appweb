@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { sendInventoryAlert } from '../services/email.js';
 import { getProductDetail, mapProducto } from '../services/productDetail.js';
 import { adjustProductStock } from '../services/productStockAdjustment.js';
 import { updateProductGeneral } from '../services/productUpdate.js';
+import { listProductWastes, registerProductWaste } from '../services/productWaste.js';
+import { getOperationalSummary } from '../services/operationalSummary.js';
 
 const router = Router();
+const requireAdmin = requireRole('admin');
 
 router.use(requireAuth);
 
@@ -31,6 +34,10 @@ function validarProducto(body) {
     return { error: 'Precios y stocks deben ser números mayores o iguales a cero.' };
   }
 
+  if (![stockActual, stockMinimo].every(Number.isInteger)) {
+    return { error: 'Los stocks deben ser numeros enteros.' };
+  }
+
   return {
     data: {
       nombre,
@@ -52,18 +59,25 @@ async function obtenerProducto(connection, id, idUsuario) {
 }
 
 async function registrarMovimiento(connection, movimiento) {
+  const columns = ['id_producto', 'tipo_movimiento', 'cantidad', 'stock_anterior', 'stock_nuevo', 'motivo'];
+  const values = [
+    movimiento.id_producto,
+    movimiento.tipo_movimiento,
+    movimiento.cantidad,
+    movimiento.stock_anterior,
+    movimiento.stock_nuevo,
+    movimiento.motivo,
+  ];
+
+  if (movimiento.id_usuario) {
+    columns.push('id_usuario');
+    values.push(movimiento.id_usuario);
+  }
+
   await connection.execute(
-    `INSERT INTO movimientos_inventario
-      (id_producto, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [
-      movimiento.id_producto,
-      movimiento.tipo_movimiento,
-      movimiento.cantidad,
-      movimiento.stock_anterior,
-      movimiento.stock_nuevo,
-      movimiento.motivo,
-    ],
+    `INSERT INTO movimientos_inventario (${columns.join(', ')})
+     VALUES (${columns.map(() => '?').join(', ')})`,
+    values,
   );
 }
 
@@ -79,63 +93,21 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/resumen/dia', async (req, res, next) => {
+router.get('/resumen/dia', requireAdmin, async (req, res, next) => {
   try {
-    const [resumen] = await query(
-      `SELECT
-        COALESCE(SUM(
-          CASE
-            WHEN m.tipo_movimiento = 'venta' AND m.motivo LIKE '%total %'
-            THEN CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(m.motivo, 'total ', -1), ' |', 1) AS DECIMAL(10, 2))
-            WHEN m.tipo_movimiento = 'venta'
-            THEN m.cantidad * p.precio_venta
-            ELSE 0
-          END
-        ), 0) AS ventas_dia,
-        COALESCE(SUM(
-          CASE
-            WHEN m.stock_nuevo > m.stock_anterior
-            THEN (m.stock_nuevo - m.stock_anterior) * (p.precio_venta - p.precio_compra)
-            ELSE 0
-          END
-        ), 0) AS margen_potencial,
-        COALESCE((
-          SELECT SUM(mm.costo_perdida)
-          FROM mermas mm
-          INNER JOIN productos pm ON pm.id_producto = mm.id_producto
-          WHERE pm.id_usuario = ? AND DATE(mm.creado_en) = CURRENT_DATE()
-        ), 0) AS perdidas,
-        COALESCE((
-          SELECT SUM(pd.cantidad * pd.precio_reducido)
-          FROM productos_danados pd
-          INNER JOIN productos ppd ON ppd.id_producto = pd.id_producto_original
-          WHERE ppd.id_usuario = ? AND pd.vendible = true AND DATE(pd.creado_en) = CURRENT_DATE()
-        ), 0) AS valor_danado_vendible
-      FROM movimientos_inventario m
-      INNER JOIN productos p ON p.id_producto = m.id_producto
-      WHERE p.id_usuario = ? AND DATE(m.fecha) = CURRENT_DATE()`,
-      [req.user.id_usuario, req.user.id_usuario, req.user.id_usuario],
-    );
-
-    const margenPotencial = Number(resumen?.margen_potencial ?? 0);
-    const ventasDia = Number(resumen?.ventas_dia ?? 0);
-    const perdidas = Number(resumen?.perdidas ?? 0);
-    const valorDanadoVendible = Number(resumen?.valor_danado_vendible ?? 0);
-
-    return res.json({
-      margen_potencial: margenPotencial,
-      ganancia_potencial: margenPotencial,
-      ventas_dia: ventasDia,
-      perdidas,
-      valor_danado_vendible: valorDanadoVendible,
-      balance_potencial: ventasDia - perdidas,
+    const result = await getOperationalSummary({
+      idUsuario: req.user.id_usuario,
+      fecha: req.query.fecha,
+      queryFn: query,
     });
+
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }
 });
 
-router.get('/movimientos/recientes', async (req, res, next) => {
+router.get('/movimientos/recientes', requireAdmin, async (req, res, next) => {
   try {
     const movimientos = await query(
       `SELECT
@@ -147,9 +119,12 @@ router.get('/movimientos/recientes', async (req, res, next) => {
         m.stock_anterior,
         m.stock_nuevo,
         m.motivo,
-        m.fecha
+        m.fecha,
+        m.id_usuario,
+        u.nombre AS responsable
       FROM movimientos_inventario m
       INNER JOIN productos p ON p.id_producto = m.id_producto
+      LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
       WHERE p.id_usuario = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC
       LIMIT 12`,
@@ -169,7 +144,7 @@ router.get('/movimientos/recientes', async (req, res, next) => {
   }
 });
 
-router.get('/:id/movimientos', async (req, res, next) => {
+router.get('/:id/movimientos', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Producto inválido.' });
@@ -185,9 +160,12 @@ router.get('/:id/movimientos', async (req, res, next) => {
         m.stock_anterior,
         m.stock_nuevo,
         m.motivo,
-        m.fecha
+        m.fecha,
+        m.id_usuario,
+        u.nombre AS responsable
       FROM movimientos_inventario m
       INNER JOIN productos p ON p.id_producto = m.id_producto
+      LEFT JOIN usuarios u ON u.id_usuario = m.id_usuario
       WHERE p.id_usuario = ? AND m.id_producto = ?
       ORDER BY m.fecha DESC, m.id_movimiento DESC`,
       [req.user.id_usuario, id],
@@ -206,7 +184,7 @@ router.get('/:id/movimientos', async (req, res, next) => {
   }
 });
 
-router.get('/danados-vendibles', async (req, res, next) => {
+router.get('/danados-vendibles', requireAdmin, async (req, res, next) => {
   try {
     const danados = await query(
       `SELECT
@@ -241,32 +219,14 @@ router.get('/danados-vendibles', async (req, res, next) => {
   }
 });
 
-router.get('/mermas', async (req, res, next) => {
+router.get('/mermas', requireAdmin, async (req, res, next) => {
   try {
-    const mermas = await query(
-      `SELECT
-        m.id_merma,
-        m.id_producto,
-        p.nombre AS producto,
-        m.cantidad,
-        m.motivo,
-        m.costo_perdida,
-        m.creado_en
-      FROM mermas m
-      INNER JOIN productos p ON p.id_producto = m.id_producto
-      WHERE p.id_usuario = ?
-      ORDER BY m.creado_en DESC, m.id_merma DESC
-      LIMIT 20`,
-      [req.user.id_usuario],
-    );
+    const mermas = await listProductWastes({
+      idUsuario: req.user.id_usuario,
+      queryFn: query,
+    });
 
-    return res.json(
-      mermas.map((merma) => ({
-        ...merma,
-        cantidad: Number(merma.cantidad),
-        costo_perdida: Number(merma.costo_perdida),
-      })),
-    );
+    return res.json(mermas);
   } catch (error) {
     return next(error);
   }
@@ -286,7 +246,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   const parsed = validarProducto(req.body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
 
@@ -325,7 +285,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
     const result = await updateProductGeneral({
       idParam: req.params.id,
@@ -340,7 +300,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/:id/ajustes', async (req, res, next) => {
+router.post('/:id/ajustes', requireAdmin, async (req, res, next) => {
   try {
     const result = await adjustProductStock({
       idParam: req.params.id,
@@ -355,13 +315,13 @@ router.post('/:id/ajustes', async (req, res, next) => {
   }
 });
 
-router.post('/:id/danado', async (req, res, next) => {
+router.post('/:id/danado', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioReducido = toNumber(req.body.precio_reducido);
   const descripcion = String(req.body.descripcion_dano ?? '').trim();
 
-  if (!Number.isInteger(id) || cantidad <= 0 || precioReducido < 0 || !descripcion) {
+  if (!Number.isInteger(id) || !Number.isInteger(cantidad) || cantidad <= 0 || precioReducido < 0 || !descripcion) {
     return res.status(400).json({ error: 'Cantidad, precio reducido y descripción son requeridos.' });
   }
 
@@ -404,54 +364,26 @@ router.post('/:id/danado', async (req, res, next) => {
   }
 });
 
-router.post('/:id/merma', async (req, res, next) => {
-  const id = Number(req.params.id);
-  const cantidad = toNumber(req.body.cantidad);
-  const motivo = String(req.body.motivo ?? '').trim();
-  const costoPerdida = toNumber(req.body.costo_perdida);
-
-  if (!Number.isInteger(id) || cantidad <= 0 || costoPerdida < 0 || !motivo) {
-    return res.status(400).json({ error: 'Cantidad, motivo y costo de pérdida son requeridos.' });
-  }
-
+router.post('/:id/merma', requireAdmin, async (req, res, next) => {
   try {
-    const result = await withTransaction(async (connection) => {
-      const producto = await obtenerProducto(connection, id, req.user.id_usuario);
-      if (!producto) return { status: 404, error: 'Producto no encontrado.' };
-      if (!producto.activo) return { status: 400, error: 'No se puede modificar un producto desactivado.' };
-      if (Number(producto.stock_actual) < cantidad) return { status: 400, error: 'Stock insuficiente.' };
-
-      const stockNuevo = Number(producto.stock_actual) - cantidad;
-
-      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
-        stockNuevo,
-        id,
-        req.user.id_usuario,
-      ]);
-      await connection.execute(
-        'INSERT INTO mermas (id_producto, cantidad, motivo, costo_perdida) VALUES (?, ?, ?, ?)',
-        [id, cantidad, motivo, costoPerdida],
-      );
-      await registrarMovimiento(connection, {
-        id_producto: id,
-        tipo_movimiento: 'merma',
-        cantidad,
-        stock_anterior: Number(producto.stock_actual),
-        stock_nuevo: stockNuevo,
-        motivo,
-      });
-
-      return { producto: await obtenerProducto(connection, id, req.user.id_usuario) };
+    const result = await registerProductWaste({
+      idParam: req.params.id,
+      idUsuario: req.user.id_usuario,
+      body: req.body,
+      withTransactionFn: withTransaction,
     });
 
-    if (result.error) return res.status(result.status).json({ error: result.error });
-    return res.status(201).json(mapProducto(result.producto));
+    return res.status(result.status).json(result.body);
   } catch (error) {
     return next(error);
   }
 });
 
 router.post('/:id/venta', async (req, res, next) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', '</api/ventas>; rel="successor-version"');
+  res.setHeader('Warning', '299 - "POST /api/productos/:id/venta es legacy; usa POST /api/ventas"');
+
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioUnitario = toNumber(req.body.precio_unitario);
@@ -504,11 +436,23 @@ router.post('/:id/venta', async (req, res, next) => {
     let alerta = null;
 
     if (producto.activo && producto.stock_actual <= producto.stock_minimo) {
-      alerta = await sendInventoryAlert({
-        subject: `Stock bajo: ${producto.nombre}`,
-        text: `El producto ${producto.nombre} quedo con ${producto.stock_actual} unidades. Minimo configurado: ${producto.stock_minimo}.`,
-        html: `<p>El producto <strong>${producto.nombre}</strong> quedo con ${producto.stock_actual} unidades.</p><p>Minimo configurado: ${producto.stock_minimo}.</p>`,
-      });
+      try {
+        alerta = await sendInventoryAlert({
+          subject: `Stock bajo: ${producto.nombre}`,
+          text: `El producto ${producto.nombre} quedo con ${producto.stock_actual} unidades. Minimo configurado: ${producto.stock_minimo}.`,
+          html: `<p>El producto <strong>${producto.nombre}</strong> quedo con ${producto.stock_actual} unidades.</p><p>Minimo configurado: ${producto.stock_minimo}.</p>`,
+        });
+      } catch (alertError) {
+        console.error('[Inventory alert error]', {
+          productId: producto.id_producto,
+          message: alertError.message,
+          code: alertError.code,
+        });
+        alerta = {
+          delivered: false,
+          error: 'No se pudo enviar la alerta de stock bajo.',
+        };
+      }
     }
 
     return res.status(201).json({ producto, total: result.total, alerta });
@@ -517,7 +461,7 @@ router.post('/:id/venta', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/desactivar', async (req, res, next) => {
+router.patch('/:id/desactivar', requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
   const motivo = String(req.body.motivo ?? 'Producto desactivado').trim();
 

@@ -4,8 +4,17 @@ import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiRequest, clearSession, getToken } from '@/lib/api';
-import type { Merma, MovimientoInventario, Producto, ProductoDanado, ResumenDia } from '@/lib/api';
+import { apiRequest, clearSession, getStoredUser, getToken } from '@/lib/api';
+import type {
+  Merma,
+  MovimientoInventario,
+  Producto,
+  ProductoDanado,
+  ResumenDia,
+  Usuario,
+  VentaDetalle,
+  VentaResumen,
+} from '@/lib/api';
 
 type ProductoForm = {
   nombre: string;
@@ -28,12 +37,26 @@ type InventorySection =
   | 'registrar'
   | 'ajuste'
   | 'venta'
+  | 'ventas'
   | 'dano'
   | 'merma'
   | 'danados'
   | 'mermas'
   | 'historial-producto'
   | 'historial-reciente';
+
+const adminSections = new Set<InventorySection>([
+  'resumen',
+  'registrar',
+  'seleccionado',
+  'ajuste',
+  'dano',
+  'merma',
+  'danados',
+  'mermas',
+  'historial-producto',
+  'historial-reciente',
+]);
 
 const emptyForm: ProductoForm = {
   nombre: '',
@@ -45,12 +68,25 @@ const emptyForm: ProductoForm = {
 };
 
 const emptyResumen: ResumenDia = {
+  fecha: '',
+  zona_horaria: 'America/Mexico_City',
+  ventas_confirmadas: 0,
   margen_potencial: 0,
   ventas_dia: 0,
   perdidas: 0,
   valor_danado_vendible: 0,
+  balance: 0,
   balance_potencial: 0,
 };
+
+function todayInputValue() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
 
 export default function InventarioPage() {
   const router = useRouter();
@@ -60,24 +96,31 @@ export default function InventarioPage() {
   const [productosDanados, setProductosDanados] = useState<ProductoDanado[]>([]);
   const [mermas, setMermas] = useState<Merma[]>([]);
   const [resumenDia, setResumenDia] = useState<ResumenDia>(emptyResumen);
+  const [ventas, setVentas] = useState<VentaResumen[]>([]);
+  const [selectedSale, setSelectedSale] = useState<VentaDetalle | null>(null);
+  const [summaryDate, setSummaryDate] = useState(todayInputValue);
+  const [salesDate, setSalesDate] = useState(todayInputValue);
   const [statusFilter, setStatusFilter] = useState<'todos' | Producto['estado']>('todos');
   const [form, setForm] = useState<ProductoForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [damageForm, setDamageForm] = useState({ cantidad: '', precio_reducido: '', descripcion_dano: '' });
-  const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '', costo_perdida: '' });
+  const [wasteForm, setWasteForm] = useState({ cantidad: '', motivo: '' });
   const [saleForm, setSaleForm] = useState({ producto_id: '', cantidad: '', nota: '' });
+  const [saleSearch, setSaleSearch] = useState('');
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [adjustmentForm, setAdjustmentForm] = useState<{ tipo: 'entrada' | 'salida'; cantidad: string; motivo: string }>({
     tipo: 'entrada',
     cantidad: '',
     motivo: '',
   });
-  const [activeSection, setActiveSection] = useState<InventorySection>('resumen');
+  const [activeSection, setActiveSection] = useState<InventorySection>('venta');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentUser] = useState<Usuario | null>(() => getStoredUser());
+  const isAdmin = currentUser?.rol === 'admin';
 
   const activeProducts = useMemo(() => productos.filter((producto) => producto.activo), [productos]);
   const lowStockCount = useMemo(() => productos.filter((producto) => producto.estado === 'bajo stock').length, [productos]);
@@ -97,14 +140,41 @@ export default function InventarioPage() {
       return sum + item.cantidad * Number(producto?.precio_venta ?? 0);
     }, 0);
   }, [productos, saleItems]);
+  const saleSearchText = saleSearch.trim().toLowerCase();
+  const searchableSaleProducts = useMemo(
+    () =>
+      saleSearchText
+        ? activeProducts.filter((producto) =>
+            `${producto.nombre} ${producto.categoria}`.toLowerCase().includes(saleSearchText),
+          )
+        : activeProducts,
+    [activeProducts, saleSearchText],
+  );
+  const wasteEstimatedCost = useMemo(() => {
+    const cantidad = Number(wasteForm.cantidad);
+
+    if (!selectedProduct || !Number.isInteger(cantidad) || cantidad <= 0) return 0;
+
+    return cantidad * Number(selectedProduct.precio_compra);
+  }, [selectedProduct, wasteForm.cantidad]);
   const saleItemsDetailed = useMemo(
     () =>
       saleItems
         .map((item) => {
           const producto = productos.find((current) => current.id_producto === item.id_producto);
-          return producto ? { ...item, producto } : null;
+          return producto
+            ? {
+                ...item,
+                producto,
+                precio_unitario: Number(producto.precio_venta),
+                subtotal: item.cantidad * Number(producto.precio_venta),
+              }
+            : null;
         })
-        .filter((item): item is SaleItem & { producto: Producto } => Boolean(item)),
+        .filter(
+          (item): item is SaleItem & { producto: Producto; precio_unitario: number; subtotal: number } =>
+            Boolean(item),
+        ),
     [productos, saleItems],
   );
   const loadProductos = useCallback(async () => {
@@ -112,14 +182,28 @@ export default function InventarioPage() {
     setIsLoading(true);
 
     try {
-      const [productosData, movimientosData, danadosData, mermasData, resumenData] = await Promise.all([
-        apiRequest<Producto[]>('/api/productos'),
-        apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
-        apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
-        apiRequest<Merma[]>('/api/productos/mermas'),
-        apiRequest<ResumenDia>('/api/productos/resumen/dia'),
+      const productosRequest = apiRequest<Producto[]>('/api/productos');
+      const adminRequests = isAdmin
+        ? Promise.all([
+            apiRequest<MovimientoInventario[]>('/api/productos/movimientos/recientes'),
+            apiRequest<ProductoDanado[]>('/api/productos/danados-vendibles'),
+            apiRequest<Merma[]>('/api/productos/mermas'),
+            apiRequest<ResumenDia>(`/api/productos/resumen/dia?fecha=${encodeURIComponent(summaryDate)}`),
+          ])
+        : Promise.resolve<[MovimientoInventario[], ProductoDanado[], Merma[], ResumenDia]>([
+            [],
+            [],
+            [],
+            emptyResumen,
+          ]);
+      const ventasRequest = apiRequest<VentaResumen[]>(`/api/ventas?fecha=${encodeURIComponent(salesDate)}`);
+      const [productosData, ventasData, [movimientosData, danadosData, mermasData, resumenData]] = await Promise.all([
+        productosRequest,
+        ventasRequest,
+        adminRequests,
       ]);
       setProductos(productosData);
+      setVentas(ventasData);
       setMovimientos(movimientosData);
       setProductosDanados(danadosData);
       setMermas(mermasData);
@@ -135,21 +219,20 @@ export default function InventarioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [isAdmin, router, salesDate, summaryDate]);
 
   useEffect(() => {
     if (!getToken()) {
       router.replace('/login');
       return;
     }
-
     queueMicrotask(() => {
       void loadProductos();
     });
   }, [loadProductos, router]);
 
   useEffect(() => {
-    if (!selectedId) {
+    if (!isAdmin || !selectedId) {
       queueMicrotask(() => setProductMovements([]));
       return;
     }
@@ -171,7 +254,7 @@ export default function InventarioPage() {
     return () => {
       ignore = true;
     };
-  }, [selectedId]);
+  }, [isAdmin, selectedId]);
 
   function updateForm(field: keyof ProductoForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -301,10 +384,9 @@ export default function InventarioPage() {
         body: JSON.stringify({
           cantidad: Number(wasteForm.cantidad),
           motivo: wasteForm.motivo,
-          costo_perdida: Number(wasteForm.costo_perdida),
         }),
       });
-      setWasteForm({ cantidad: '', motivo: '', costo_perdida: '' });
+      setWasteForm({ cantidad: '', motivo: '' });
       setStatus('Merma: se descontó stock y se registró pérdida total.');
       await loadProductos();
     } catch (requestError) {
@@ -314,27 +396,24 @@ export default function InventarioPage() {
     }
   }
 
-  function addSaleItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const idProducto = Number(saleForm.producto_id);
-    const cantidad = Number(saleForm.cantidad);
+  function tryAddSaleItem(idProducto: number, cantidad: number) {
     const producto = activeProducts.find((item) => item.id_producto === idProducto);
 
     if (!producto) {
       setError('Selecciona un producto activo.');
-      return;
+      return false;
     }
 
     if (!Number.isInteger(cantidad) || cantidad <= 0) {
       setError('La cantidad debe ser un entero mayor que cero.');
-      return;
+      return false;
     }
 
     const currentQuantity = saleItems.find((item) => item.id_producto === idProducto)?.cantidad ?? 0;
 
     if (currentQuantity + cantidad > producto.stock_actual) {
       setError(`La cantidad total no puede superar el stock disponible (${producto.stock_actual}).`);
-      return;
+      return false;
     }
 
     setSaleItems((current) => {
@@ -347,8 +426,18 @@ export default function InventarioPage() {
 
       return [...current, { id_producto: idProducto, cantidad }];
     });
-    setSaleForm((current) => ({ ...current, producto_id: '', cantidad: '' }));
     setError('');
+    return true;
+  }
+
+  function addSaleItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const idProducto = Number(saleForm.producto_id);
+    const cantidad = Number(saleForm.cantidad);
+
+    if (tryAddSaleItem(idProducto, cantidad)) {
+      setSaleForm((current) => ({ ...current, producto_id: '', cantidad: '' }));
+    }
   }
 
   function updateSaleItemQuantity(idProducto: number, value: string) {
@@ -401,9 +490,50 @@ export default function InventarioPage() {
       setSaleItems([]);
       setSaleForm({ producto_id: '', cantidad: '', nota: '' });
       setStatus('Venta registrada en una sola operacion.');
+      setActiveSection('ventas');
       await loadProductos();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No se pudo registrar la venta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function loadSaleDetail(idVenta: number) {
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      const venta = await apiRequest<VentaDetalle>(`/api/ventas/${idVenta}`);
+      setSelectedSale(venta);
+      setActiveSection('ventas');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo consultar el detalle de la venta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function cancelSelectedSale(venta: VentaResumen | VentaDetalle) {
+    const confirmed = window.confirm(`¿Seguro que quieres cancelar la venta ${venta.folio}? Se devolverá el stock al inventario.`);
+
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    setError('');
+    setStatus('');
+
+    try {
+      await apiRequest(`/api/ventas/${venta.id_venta}/cancelar`, {
+        method: 'PATCH',
+        body: JSON.stringify({ motivo: 'Cancelada desde historial de ventas' }),
+      });
+      setStatus(`Venta ${venta.folio} cancelada y stock devuelto.`);
+      setSelectedSale(null);
+      await loadProductos();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No se pudo cancelar la venta.');
     } finally {
       setIsSaving(false);
     }
@@ -497,7 +627,8 @@ export default function InventarioPage() {
         { id: 'registrar', label: editingId ? 'Editar producto' : 'Registrar producto', description: 'Alta y edición' },
         { id: 'seleccionado', label: 'Producto seleccionado', description: 'Detalle y acciones' },
         { id: 'ajuste', label: 'Ajustar stock', description: 'Entrada o salida manual' },
-        { id: 'venta', label: 'Vender producto', description: 'Salida por venta' },
+        { id: 'venta', label: 'Punto de venta', description: 'Venta con varios productos' },
+        { id: 'ventas', label: 'Ventas', description: 'Historial, detalle y cancelacion' },
       ],
     },
     {
@@ -522,7 +653,13 @@ export default function InventarioPage() {
       ],
     },
   ];
-  const menuItems = menuGroups.flatMap((group) => group.items);
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => isAdmin || !adminSections.has(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
+  const menuItems = visibleMenuGroups.flatMap((group) => group.items);
   const activeMenuItem = menuItems.find((item) => item.id === activeSection) ?? menuItems[0];
 
   return (
@@ -536,7 +673,7 @@ export default function InventarioPage() {
           </div>
 
           <nav className="mt-8 space-y-6">
-            {menuGroups.map((group) => (
+            {visibleMenuGroups.map((group) => (
               <section key={group.title}>
                 <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{group.title}</p>
                 <div className="space-y-1.5">
@@ -600,10 +737,29 @@ export default function InventarioPage() {
 
         {activeSection === 'resumen' && (
           <section className="mt-6 space-y-5">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-950/5">
+              <label className="block max-w-xs">
+                <span className="text-sm font-semibold text-slate-700">Fecha del resumen</span>
+                <input
+                  type="date"
+                  value={summaryDate}
+                  onChange={(event) => setSummaryDate(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
+              <p className="mt-3 text-xs font-semibold text-slate-500">
+                Zona horaria: {resumenDia.zona_horaria || 'America/Mexico_City'}
+              </p>
+            </section>
+
             <section className="grid gap-4 lg:grid-cols-4">
-              <Metric label="Ventas del día" value={formatCurrency(resumenDia.ventas_dia)} tone="success" />
+              <Metric label="Ventas confirmadas" value={formatCurrency(resumenDia.ventas_confirmadas ?? resumenDia.ventas_dia)} tone="success" />
               <Metric label="Pérdidas de hoy" value={formatCurrency(resumenDia.perdidas)} tone="danger" />
-              <Metric label="Balance del día" value={formatCurrency(resumenDia.balance_potencial)} tone={resumenDia.balance_potencial < 0 ? 'danger' : 'success'} />
+              <Metric
+                label="Balance"
+                value={formatCurrency(resumenDia.balance ?? resumenDia.balance_potencial)}
+                tone={(resumenDia.balance ?? resumenDia.balance_potencial) < 0 ? 'danger' : 'success'}
+              />
               <Metric label="Daño vendible de hoy" value={formatCurrency(resumenDia.valor_danado_vendible)} tone="warning" />
             </section>
 
@@ -629,7 +785,8 @@ export default function InventarioPage() {
                   <QuickAction title="Registrar producto" description="Alta de un producto nuevo." onClick={() => setActiveSection('registrar')} />
                   <QuickAction title="Revisar productos" description="Consulta, filtros y edición." onClick={() => setActiveSection('productos')} />
                   <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                  <QuickAction title="Vender producto" description="Descuenta stock por venta." onClick={() => setActiveSection('venta')} />
+                  <QuickAction title="Punto de venta" description="Registra varios productos en un ticket." onClick={() => setActiveSection('venta')} />
+                  <QuickAction title="Historial de ventas" description="Detalle y cancelacion." onClick={() => setActiveSection('ventas')} />
                   <QuickAction title="Registrar daño" description="Producto recuperable con precio reducido." onClick={() => setActiveSection('dano')} />
                 </div>
               </section>
@@ -766,7 +923,8 @@ export default function InventarioPage() {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <QuickAction title="Editar datos" description="Precio, categoría o stock mínimo." onClick={() => selectedProduct && startEdit(selectedProduct)} disabled={!selectedProduct} />
                 <QuickAction title="Ajustar stock" description="Entrada o salida con motivo." onClick={() => setActiveSection('ajuste')} disabled={!selectedProduct} />
-                <QuickAction title="Vender producto" description="Descontar unidades vendidas." onClick={() => setActiveSection('venta')} disabled={!selectedProduct?.activo} />
+                <QuickAction title="Punto de venta" description="Armar ticket con varios productos." onClick={() => setActiveSection('venta')} disabled={activeProducts.length === 0} />
+                <QuickAction title="Ver ventas" description="Historial y cancelaciones." onClick={() => setActiveSection('ventas')} />
                 <QuickAction title="Registrar daño leve" description="Unidades vendibles con descuento." onClick={() => setActiveSection('dano')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Registrar merma" description="Descontar pérdida total." onClick={() => setActiveSection('merma')} disabled={!selectedProduct?.activo} />
                 <QuickAction title="Ver historial" description="Movimientos de este producto." onClick={() => setActiveSection('historial-producto')} disabled={!selectedProduct} />
@@ -800,6 +958,8 @@ export default function InventarioPage() {
                 <Field
                   label="Cantidad"
                   type="number"
+                  numericMode="integer"
+                  min="1"
                   value={adjustmentForm.cantidad}
                   onChange={(value) => setAdjustmentForm((current) => ({ ...current, cantidad: value }))}
                 />
@@ -817,9 +977,15 @@ export default function InventarioPage() {
         )}
 
         {activeSection === 'venta' && (
-          <section className="mt-6 grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-            <ActionPanel title="Agregar productos" description="Selecciona productos activos y consolida cantidades antes de confirmar.">
+          <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <ActionPanel title="Punto de venta" description="Agrega productos activos al mismo ticket y confirma una sola venta.">
               <form onSubmit={addSaleItem} className="grid gap-4">
+                <Field
+                  label="Buscar producto"
+                  value={saleSearch}
+                  onChange={setSaleSearch}
+                  required={false}
+                />
                 <label className="block">
                   <span className="text-sm font-semibold text-slate-700">Producto del inventario</span>
                   <select
@@ -829,7 +995,7 @@ export default function InventarioPage() {
                     className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                   >
                     <option value="">Selecciona un producto</option>
-                    {activeProducts.map((producto) => (
+                    {searchableSaleProducts.map((producto) => (
                       <option key={producto.id_producto} value={producto.id_producto}>
                         {producto.nombre} - stock {producto.stock_actual}
                       </option>
@@ -839,6 +1005,8 @@ export default function InventarioPage() {
                 <Field
                   label="Cantidad"
                   type="number"
+                  numericMode="integer"
+                  min="1"
                   value={saleForm.cantidad}
                   onChange={(value) => setSaleForm((current) => ({ ...current, cantidad: value }))}
                 />
@@ -846,20 +1014,53 @@ export default function InventarioPage() {
                   Agregar a la venta
                 </button>
               </form>
+              <div className="mt-6 border-t border-slate-100 pt-5">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Productos disponibles</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {searchableSaleProducts.length === 0 && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500 sm:col-span-2">
+                      No hay productos que coincidan con la busqueda.
+                    </p>
+                  )}
+                  {searchableSaleProducts.map((producto) => {
+                    const itemInSale = saleItems.find((item) => item.id_producto === producto.id_producto);
+                    const remainingStock = producto.stock_actual - (itemInSale?.cantidad ?? 0);
+
+                    return (
+                      <button
+                        key={producto.id_producto}
+                        type="button"
+                        onClick={() => tryAddSaleItem(producto.id_producto, 1)}
+                        disabled={remainingStock <= 0}
+                        className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-300 hover:bg-sky-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                      >
+                        <span className="block text-sm font-bold text-slate-950">{producto.nombre}</span>
+                        <span className="mt-1 block text-xs font-semibold text-slate-500">
+                          {formatCurrency(producto.precio_venta)} | stock disponible {remainingStock}
+                        </span>
+                        <span className="mt-3 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-bold text-white">
+                          Agregar 1
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </ActionPanel>
 
-            <ActionPanel title="Venta actual" description="Revisa cantidades y confirma la venta en una sola operacion.">
+            <ActionPanel title="Ticket de venta" description="Modifica cantidades enteras, elimina lineas y confirma una sola solicitud.">
               <div className="grid gap-4">
                 {saleItemsDetailed.length === 0 ? (
                   <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
-                    Agrega al menos un producto para registrar la venta.
+                    Agrega productos al ticket para registrar la venta.
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="w-full min-w-[620px] text-left text-sm">
+                    <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Precio</th>
                           <th className="px-4 py-3">Cantidad</th>
                           <th className="px-4 py-3">Stock</th>
                           <th className="px-4 py-3">Subtotal</th>
@@ -870,18 +1071,22 @@ export default function InventarioPage() {
                         {saleItemsDetailed.map((item) => (
                           <tr key={item.id_producto}>
                             <td className="px-4 py-3 font-semibold text-slate-950">{item.producto.nombre}</td>
+                            <td className="px-4 py-3 text-slate-600">{formatCurrency(item.precio_unitario)}</td>
                             <td className="px-4 py-3">
                               <input
                                 type="number"
                                 min="1"
                                 max={item.producto.stock_actual}
+                                step="1"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 value={item.cantidad}
                                 onChange={(event) => updateSaleItemQuantity(item.id_producto, event.target.value)}
                                 className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                               />
                             </td>
                             <td className="px-4 py-3 text-slate-600">{item.producto.stock_actual}</td>
-                            <td className="px-4 py-3 text-slate-600">{formatCurrency(item.cantidad * item.producto.precio_venta)}</td>
+                            <td className="px-4 py-3 font-bold text-slate-950">{formatCurrency(item.subtotal)}</td>
                             <td className="px-4 py-3">
                               <button type="button" onClick={() => removeSaleItem(item.id_producto)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
                                 Eliminar
@@ -907,6 +1112,132 @@ export default function InventarioPage() {
           </section>
         )}
 
+        {activeSection === 'ventas' && (
+          <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+            <DataTablePanel
+              title="Historial de ventas"
+              eyebrow="Ventas"
+              emptyText="No hay ventas registradas para la fecha seleccionada."
+              hasRows={ventas.length > 0}
+            >
+              <div className="border-b border-slate-200 p-5">
+                <label className="block max-w-xs">
+                  <span className="text-sm font-semibold text-slate-700">Fecha de venta</span>
+                  <input
+                    type="date"
+                    value={salesDate}
+                    onChange={(event) => setSalesDate(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                  />
+                </label>
+              </div>
+              <table className="w-full min-w-[780px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Folio</th>
+                    <th className="px-5 py-4">Fecha</th>
+                    <th className="px-5 py-4">Total</th>
+                    <th className="px-5 py-4">Estado</th>
+                    <th className="px-5 py-4">Productos</th>
+                    <th className="px-5 py-4">Responsable</th>
+                    <th className="px-5 py-4">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ventas.map((venta) => (
+                    <tr key={venta.id_venta} className={selectedSale?.id_venta === venta.id_venta ? 'bg-sky-50/70' : 'bg-white'}>
+                      <td className="px-5 py-4 font-semibold text-slate-950">{venta.folio}</td>
+                      <td className="px-5 py-4 text-slate-600">{formatDate(venta.creado_en)}</td>
+                      <td className="px-5 py-4 text-slate-600">{formatCurrency(venta.total)}</td>
+                      <td className="px-5 py-4">
+                        <SaleStatusBadge estado={venta.estado} />
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        {venta.total_productos} en {venta.lineas} linea(s)
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{venta.responsable}</td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => loadSaleDetail(venta.id_venta)} className="rounded-lg bg-sky-100 px-3 py-2 text-xs font-bold text-sky-700">
+                            Ver detalle
+                          </button>
+                          {venta.estado !== 'CANCELADA' && (
+                            <button type="button" onClick={() => cancelSelectedSale(venta)} disabled={isSaving} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataTablePanel>
+
+            <ActionPanel title="Detalle de venta" description="Consulta lineas, totales, nota y movimientos asociados.">
+              {!selectedSale ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                  Selecciona una venta para revisar su detalle.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Info label="Folio" value={selectedSale.folio} />
+                    <Info label="Estado" value={selectedSale.estado} />
+                    <Info label="Total" value={formatCurrency(selectedSale.total)} />
+                    <Info label="Responsable" value={selectedSale.responsable} />
+                  </div>
+                  {selectedSale.nota && <Info label="Nota" value={selectedSale.nota} />}
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full min-w-[620px] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase tracking-[0.16em] text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Producto</th>
+                          <th className="px-4 py-3">Cantidad</th>
+                          <th className="px-4 py-3">Precio</th>
+                          <th className="px-4 py-3">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedSale.detalles.map((detalle) => (
+                          <tr key={detalle.id_detalle_venta}>
+                            <td className="px-4 py-3 font-semibold text-slate-950">{detalle.producto}</td>
+                            <td className="px-4 py-3 text-slate-600">{detalle.cantidad}</td>
+                            <td className="px-4 py-3 text-slate-600">{formatCurrency(detalle.precio_unitario)}</td>
+                            <td className="px-4 py-3 font-bold text-slate-950">{formatCurrency(detalle.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Movimientos asociados</p>
+                    {selectedSale.movimientos.length === 0 ? (
+                      <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                        No hay movimientos asociados.
+                      </p>
+                    ) : (
+                      selectedSale.movimientos.map((movimiento) => (
+                        <div key={movimiento.id_movimiento} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                          <p className="font-bold text-slate-950">{formatMovementType(movimiento.tipo_movimiento)} - {movimiento.producto}</p>
+                          <p className="mt-1 text-slate-600">
+                            {movimiento.stock_anterior} &rarr; {movimiento.stock_nuevo} | {movimiento.motivo ?? 'Sin motivo'}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {selectedSale.estado !== 'CANCELADA' && (
+                    <button type="button" onClick={() => cancelSelectedSale(selectedSale)} disabled={isSaving} className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
+                      Cancelar venta y devolver stock
+                    </button>
+                  )}
+                </div>
+              )}
+            </ActionPanel>
+          </section>
+        )}
+
         {activeSection === 'dano' && (
           <section className="mt-6 grid gap-6 xl:grid-cols-[380px_minmax(0,560px)]">
             <SelectedProductCard product={selectedProduct} />
@@ -919,7 +1250,7 @@ export default function InventarioPage() {
                   onChange={setSelectedId}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cantidad" type="number" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
+                  <Field label="Cantidad" type="number" numericMode="integer" min="1" value={damageForm.cantidad} onChange={(value) => setDamageForm((current) => ({ ...current, cantidad: value }))} />
                   <Field label="Precio reducido" type="number" value={damageForm.precio_reducido} onChange={(value) => setDamageForm((current) => ({ ...current, precio_reducido: value }))} />
                 </div>
                 <Field label="Descripción del daño" value={damageForm.descripcion_dano} onChange={(value) => setDamageForm((current) => ({ ...current, descripcion_dano: value }))} />
@@ -943,8 +1274,8 @@ export default function InventarioPage() {
                   onChange={setSelectedId}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Cantidad" type="number" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
-                  <Field label="Costo pérdida" type="number" value={wasteForm.costo_perdida} onChange={(value) => setWasteForm((current) => ({ ...current, costo_perdida: value }))} />
+                  <Field label="Cantidad" type="number" numericMode="integer" min="1" value={wasteForm.cantidad} onChange={(value) => setWasteForm((current) => ({ ...current, cantidad: value }))} />
+                  <Info label="Costo calculado" value={formatCurrency(wasteEstimatedCost)} />
                 </div>
                 <Field label="Motivo" value={wasteForm.motivo} onChange={(value) => setWasteForm((current) => ({ ...current, motivo: value }))} />
                 <button disabled={!selectedProduct?.activo || isSaving} className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
@@ -1008,6 +1339,7 @@ export default function InventarioPage() {
                     <th className="px-5 py-4">Cantidad</th>
                     <th className="px-5 py-4">Motivo</th>
                     <th className="px-5 py-4">Costo pérdida</th>
+                    <th className="px-5 py-4">Responsable</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1017,6 +1349,7 @@ export default function InventarioPage() {
                       <td className="px-5 py-4 text-slate-600">{item.cantidad}</td>
                       <td className="max-w-xs px-5 py-4 text-slate-600">{item.motivo}</td>
                       <td className="px-5 py-4 text-slate-600">{formatCurrency(item.costo_perdida)}</td>
+                      <td className="px-5 py-4 text-slate-600">{item.responsable ?? `Usuario ${item.id_usuario}`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1082,8 +1415,8 @@ function ProductFormPanel({
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Precio compra" type="number" value={form.precio_compra} onChange={(value) => onChange('precio_compra', value)} />
           <Field label="Precio venta" type="number" value={form.precio_venta} onChange={(value) => onChange('precio_venta', value)} />
-          {!editingId && <Field label="Stock actual" type="number" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />}
-          <Field label="Stock mínimo" type="number" value={form.stock_minimo} onChange={(value) => onChange('stock_minimo', value)} />
+          {!editingId && <Field label="Stock actual" type="number" numericMode="integer" value={form.stock_actual} onChange={(value) => onChange('stock_actual', value)} />}
+          <Field label="Stock mínimo" type="number" numericMode="integer" value={form.stock_minimo} onChange={(value) => onChange('stock_minimo', value)} />
         </div>
       </div>
 
@@ -1189,12 +1522,16 @@ function Field({
   onChange,
   type = 'text',
   required = true,
+  numericMode = 'decimal',
+  min,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: 'text' | 'number';
   required?: boolean;
+  numericMode?: 'decimal' | 'integer';
+  min?: string;
 }) {
   return (
     <label className="block">
@@ -1203,8 +1540,10 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         type={type}
-        min={type === 'number' ? '0' : undefined}
-        step={type === 'number' ? '0.01' : undefined}
+        min={type === 'number' ? (min ?? '0') : undefined}
+        step={type === 'number' ? (numericMode === 'integer' ? '1' : '0.01') : undefined}
+        inputMode={type === 'number' ? (numericMode === 'integer' ? 'numeric' : 'decimal') : undefined}
+        pattern={type === 'number' && numericMode === 'integer' ? '[0-9]*' : undefined}
         required={required}
         className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
       />
@@ -1253,6 +1592,19 @@ function StatusBadge({ estado }: { estado: Producto['estado'] }) {
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${styles[estado]}`}>
+      {estado}
+    </span>
+  );
+}
+
+function SaleStatusBadge({ estado }: { estado: VentaResumen['estado'] }) {
+  const styles = {
+    CONFIRMADA: 'bg-sky-50 text-sky-700 border-sky-200',
+    CANCELADA: 'bg-red-50 text-red-700 border-red-200',
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${styles[estado]}`}>
       {estado}
     </span>
   );

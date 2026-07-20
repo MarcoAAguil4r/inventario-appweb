@@ -21,16 +21,19 @@ Authorization: Bearer <token>
 | Metodo | Endpoint | Funcion |
 | --- | --- | --- |
 | POST | `/api/ventas` | Registra una venta con uno o varios productos |
-| POST | `/api/productos/:id/venta` | Registra venta y descuenta stock |
+| GET | `/api/ventas?fecha=YYYY-MM-DD` | Lista ventas de una fecha |
+| GET | `/api/ventas/:id` | Consulta detalle formal de venta |
+| PATCH | `/api/ventas/:id/cancelar` | Cancela venta y devuelve stock |
+| POST | `/api/productos/:id/venta` | Legacy: registra venta de un solo producto |
 | POST | `/api/productos/:id/danado` | Registra producto danado vendible |
 | POST | `/api/productos/:id/merma` | Registra perdida o merma |
 | GET | `/api/productos/movimientos/recientes` | Lista movimientos recientes |
 | GET | `/api/productos/:id/movimientos` | Lista movimientos de un producto |
-| GET | `/api/productos/resumen/dia` | Devuelve resumen financiero del dia |
+| GET | `/api/productos/resumen/dia?fecha=YYYY-MM-DD` | Devuelve resumen operativo de una fecha |
 
 ## POST /api/ventas
 
-Registra una venta en una sola transaccion. Consolida productos repetidos, valida pertenencia del usuario, productos activos y stock suficiente antes de modificar existencias.
+Registra una venta en una sola transaccion. Consolida productos repetidos, valida pertenencia del usuario, productos activos y stock suficiente antes de modificar existencias. El backend obtiene los precios desde la base de datos, calcula subtotales por linea, suma el total general y guarda el precio aplicado en `detalle_venta`.
 
 Parametros requeridos:
 
@@ -68,7 +71,7 @@ Respuesta esperada `201`:
     "total": 150,
     "nota": "Venta mostrador"
   },
-  "detalle": [
+  "detalles": [
     {
       "id_detalle_venta": 1,
       "id_venta": 80,
@@ -77,8 +80,18 @@ Respuesta esperada `201`:
       "cantidad": 2,
       "precio_unitario": 65,
       "subtotal": 130
+    },
+    {
+      "id_detalle_venta": 2,
+      "id_venta": 80,
+      "id_producto": 5,
+      "producto": "Azucar",
+      "cantidad": 1,
+      "precio_unitario": 20,
+      "subtotal": 20
     }
   ],
+  "total": 150,
   "movimientos": [
     {
       "id_movimiento": 50,
@@ -97,9 +110,85 @@ Respuesta esperada `201`:
 
 Si una linea no tiene stock suficiente, toda la venta se rechaza y no se descuenta ningun producto.
 
+## GET /api/ventas
+
+Lista ventas del usuario autenticado. Si se envia `fecha`, se filtra por el dia local del negocio.
+
+Respuesta esperada `200`:
+
+```json
+[
+  {
+    "id_venta": 80,
+    "folio": "V001",
+    "total": 150,
+    "estado": "CONFIRMADA",
+    "nota": "Venta mostrador",
+    "creado_en": "2026-07-15T12:00:00.000Z",
+    "responsable": "Marco",
+    "total_productos": 3,
+    "lineas": 2
+  }
+]
+```
+
+## GET /api/ventas/:id
+
+Consulta una venta por identificador. Solo devuelve ventas del usuario autenticado.
+
+Respuesta esperada `200`:
+
+```json
+{
+  "id_venta": 80,
+  "folio": "V001",
+  "total": 150,
+  "estado": "CONFIRMADA",
+  "nota": "Venta mostrador",
+  "creado_en": "2026-07-15T12:00:00.000Z",
+  "responsable": "Marco",
+  "detalles": [
+    {
+      "id_detalle_venta": 1,
+      "id_producto": 1,
+      "producto": "Cafe",
+      "cantidad": 2,
+      "precio_unitario": 65,
+      "subtotal": 130
+    }
+  ],
+  "movimientos": []
+}
+```
+
+## PATCH /api/ventas/:id/cancelar
+
+Cancela una venta confirmada, cambia su estado a `CANCELADA`, devuelve stock por cada linea y registra movimientos de tipo `cancelacion_venta`.
+La venta no se elimina.
+
+Body opcional:
+
+```json
+{
+  "motivo": "Error de captura"
+}
+```
+
+Respuesta esperada `200`:
+
+```json
+{
+  "id_venta": 80,
+  "estado": "CANCELADA",
+  "productos_revertidos": 2
+}
+```
+
 ## POST /api/productos/:id/venta
 
-Registra una venta, calcula el total y descuenta unidades del stock. Si el stock queda menor o igual al minimo, puede disparar una alerta externa por correo.
+Endpoint legacy para compatibilidad con el flujo anterior de un solo producto. Para punto de venta debe usarse
+`POST /api/ventas`, que registra una venta con una o varias lineas en una sola transaccion.
+La respuesta incluye headers `Deprecation`, `Warning` y `Link` apuntando al endpoint sucesor.
 
 Parametros requeridos:
 
@@ -184,24 +273,22 @@ Respuesta esperada `201`: producto actualizado con menor stock.
 
 ## POST /api/productos/:id/merma
 
-Registra una perdida definitiva de inventario.
+Registra una perdida definitiva de inventario. El responsable se toma del JWT, el cliente no puede definirlo y el costo de perdida se calcula automaticamente con `cantidad * precio_compra`.
 
 Parametros requeridos:
 
 | Campo | Ubicacion | Tipo | Requerido | Descripcion |
 | --- | --- | --- | --- | --- |
 | `id` | path | number | Si | ID del producto |
-| `cantidad` | body | number | Si | Cantidad mayor a 0 |
+| `cantidad` | body | number | Si | Cantidad entera mayor a 0 |
 | `motivo` | body | string | Si | Motivo de la perdida |
-| `costo_perdida` | body | number | Si | Costo asociado a la perdida |
 
 Request:
 
 ```json
 {
   "cantidad": 1,
-  "motivo": "Producto caducado",
-  "costo_perdida": 40
+  "motivo": "Producto caducado"
 }
 ```
 
@@ -243,18 +330,34 @@ Respuesta esperada `200`: arreglo JSON de movimientos asociados al producto.
 
 ## GET /api/productos/resumen/dia
 
-Devuelve ventas, perdidas, valor danado vendible y balance potencial del dia actual.
+Devuelve ventas confirmadas, perdidas por mermas y balance de una fecha especifica.
+Si `fecha` se omite, usa el dia actual del negocio. La fecha se valida con formato
+`YYYY-MM-DD` y los limites del dia se calculan con zona horaria `America/Mexico_City`.
+Las ventas con estado `CANCELADA` no se incluyen.
+
+Parametros opcionales:
+
+| Parametro | Ubicacion | Requerido | Descripcion |
+| --- | --- | --- | --- |
+| `fecha` | query | No | Fecha local del resumen en formato `YYYY-MM-DD` |
 
 Respuesta esperada `200`:
 
 ```json
 {
-  "margen_potencial": 100,
-  "ganancia_potencial": 100,
-  "ventas_dia": 65,
-  "perdidas": 40,
-  "valor_danado_vendible": 30,
-  "balance_potencial": 25
+  "fecha": "2026-07-15",
+  "zona_horaria": "America/Mexico_City",
+  "ventas_confirmadas": 500,
+  "perdidas": 80,
+  "balance": 420
+}
+```
+
+Respuesta esperada `400`:
+
+```json
+{
+  "error": "Fecha invalida. Usa formato YYYY-MM-DD."
 }
 ```
 
@@ -262,6 +365,8 @@ Errores comunes:
 
 | Codigo | Caso |
 | --- | --- |
-| 400 | Cantidad invalida o stock insuficiente |
+| 400 | Fecha invalida |
 | 401 | Token faltante, invalido o expirado |
-| 404 | Producto no encontrado |
+| 403 | Usuario autenticado sin rol admin para reportes, mermas, danos o historial |
+| 404 | Venta o producto no encontrado |
+| 409 | Venta ya cancelada o sin detalle para revertir |

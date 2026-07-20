@@ -31,6 +31,8 @@ export type MovimientoInventario = {
   stock_anterior: number;
   stock_nuevo: number;
   motivo: string | null;
+  id_usuario?: number | null;
+  responsable?: string | null;
   fecha: string;
 };
 
@@ -53,15 +55,48 @@ export type Merma = {
   cantidad: number;
   motivo: string;
   costo_perdida: number;
+  id_usuario: number;
+  responsable: string | null;
   creado_en: string;
 };
 
 export type ResumenDia = {
+  fecha: string;
+  zona_horaria: string;
+  ventas_confirmadas: number;
   margen_potencial: number;
   ventas_dia: number;
   perdidas: number;
   valor_danado_vendible: number;
+  balance: number;
   balance_potencial: number;
+};
+
+export type VentaResumen = {
+  id_venta: number;
+  folio: string;
+  total: number;
+  estado: 'CONFIRMADA' | 'CANCELADA';
+  nota: string | null;
+  creado_en: string;
+  responsable: string;
+  total_productos: number;
+  lineas: number;
+};
+
+export type VentaDetalleLinea = {
+  id_detalle_venta: number;
+  id_venta: number;
+  id_producto: number;
+  producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+};
+
+export type VentaDetalle = VentaResumen & {
+  detalles: VentaDetalleLinea[];
+  movimientos: MovimientoInventario[];
 };
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -74,6 +109,19 @@ export function getToken() {
 export function saveSession(token: string, usuario: Usuario) {
   window.localStorage.setItem('inventario_token', token);
   window.localStorage.setItem('inventario_usuario', JSON.stringify(usuario));
+}
+
+export function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+
+  const rawUser = window.localStorage.getItem('inventario_usuario');
+  if (!rawUser) return null;
+
+  try {
+    return JSON.parse(rawUser) as Usuario;
+  } catch {
+    return null;
+  }
 }
 
 export function clearSession() {
@@ -108,6 +156,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 
   if (!response.ok) {
     if (response.status === 401) {
+      clearSession();
       throw new Error(payload.error ?? 'Tu sesion expiro o no tienes autorizacion.');
     }
 
