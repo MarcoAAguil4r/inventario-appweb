@@ -206,6 +206,7 @@ router.get('/:id/movimientos', async (req, res, next) => {
   }
 });
 
+// ── CAMBIO 1: Filtro mejorado — solo activos con cantidad_disponible > 0 ──
 router.get('/danados-vendibles', async (req, res, next) => {
   try {
     const danados = await query(
@@ -214,6 +215,7 @@ router.get('/danados-vendibles', async (req, res, next) => {
         d.id_producto_original,
         p.nombre AS producto,
         d.cantidad,
+        d.cantidad_disponible,
         d.precio_reducido,
         d.descripcion_dano,
         d.vendible,
@@ -221,7 +223,10 @@ router.get('/danados-vendibles', async (req, res, next) => {
         d.creado_en
       FROM productos_danados d
       INNER JOIN productos p ON p.id_producto = d.id_producto_original
-      WHERE p.id_usuario = ? AND d.vendible = true
+      WHERE p.id_usuario = ?
+        AND d.vendible = true
+        AND d.activo = true
+        AND d.cantidad_disponible > 0
       ORDER BY d.creado_en DESC, d.id_producto_danado DESC
       LIMIT 20`,
       [req.user.id_usuario],
@@ -231,6 +236,7 @@ router.get('/danados-vendibles', async (req, res, next) => {
       danados.map((danado) => ({
         ...danado,
         cantidad: Number(danado.cantidad),
+        cantidad_disponible: Number(danado.cantidad_disponible),
         precio_reducido: Number(danado.precio_reducido),
         vendible: Boolean(danado.vendible),
         activo: Boolean(danado.activo),
@@ -355,14 +361,24 @@ router.post('/:id/ajustes', async (req, res, next) => {
   }
 });
 
+// ── CAMBIO 2: Validación precio > 0 y cantidad_disponible en INSERT ──
 router.post('/:id/danado', async (req, res, next) => {
   const id = Number(req.params.id);
   const cantidad = toNumber(req.body.cantidad);
   const precioReducido = toNumber(req.body.precio_reducido);
   const descripcion = String(req.body.descripcion_dano ?? '').trim();
 
-  if (!Number.isInteger(id) || cantidad <= 0 || precioReducido < 0 || !descripcion) {
-    return res.status(400).json({ error: 'Cantidad, precio reducido y descripción son requeridos.' });
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: 'ID de producto inválido.' });
+  }
+  if (!descripcion) {
+    return res.status(400).json({ error: 'La descripción del daño es requerida.' });
+  }
+  if (isNaN(cantidad) || cantidad <= 0) {
+    return res.status(400).json({ error: 'La cantidad debe ser mayor que cero.' });
+  }
+  if (isNaN(precioReducido) || precioReducido <= 0) {
+    return res.status(400).json({ error: 'El precio reducido debe ser mayor que cero.' });
   }
 
   try {
@@ -374,16 +390,15 @@ router.post('/:id/danado', async (req, res, next) => {
 
       const stockNuevo = Number(producto.stock_actual) - cantidad;
 
-      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
-        stockNuevo,
-        id,
-        req.user.id_usuario,
-      ]);
+      await connection.execute(
+        'UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?',
+        [stockNuevo, id, req.user.id_usuario],
+      );
       await connection.execute(
         `INSERT INTO productos_danados
-          (id_producto_original, cantidad, precio_reducido, descripcion_dano, vendible, activo)
-         VALUES (?, ?, ?, ?, true, true)`,
-        [id, cantidad, precioReducido, descripcion],
+          (id_producto_original, cantidad, cantidad_disponible, precio_reducido, descripcion_dano, vendible, activo)
+         VALUES (?, ?, ?, ?, ?, true, true)`,
+        [id, cantidad, cantidad, precioReducido, descripcion],
       );
       await registrarMovimiento(connection, {
         id_producto: id,
@@ -423,11 +438,10 @@ router.post('/:id/merma', async (req, res, next) => {
 
       const stockNuevo = Number(producto.stock_actual) - cantidad;
 
-      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
-        stockNuevo,
-        id,
-        req.user.id_usuario,
-      ]);
+      await connection.execute(
+        'UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?',
+        [stockNuevo, id, req.user.id_usuario],
+      );
       await connection.execute(
         'INSERT INTO mermas (id_producto, cantidad, motivo, costo_perdida) VALUES (?, ?, ?, ?)',
         [id, cantidad, motivo, costoPerdida],
@@ -480,12 +494,10 @@ router.post('/:id/venta', async (req, res, next) => {
         .filter(Boolean)
         .join(' | ');
 
-      await connection.execute('UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?', [
-        stockNuevo,
-        id,
-        req.user.id_usuario,
-      ]);
-
+      await connection.execute(
+        'UPDATE productos SET stock_actual = ? WHERE id_producto = ? AND id_usuario = ?',
+        [stockNuevo, id, req.user.id_usuario],
+      );
       await registrarMovimiento(connection, {
         id_producto: id,
         tipo_movimiento: 'venta',
@@ -528,10 +540,10 @@ router.patch('/:id/desactivar', async (req, res, next) => {
       const actual = await obtenerProducto(connection, id, req.user.id_usuario);
       if (!actual) return null;
 
-      await connection.execute('UPDATE productos SET activo = false WHERE id_producto = ? AND id_usuario = ?', [
-        id,
-        req.user.id_usuario,
-      ]);
+      await connection.execute(
+        'UPDATE productos SET activo = false WHERE id_producto = ? AND id_usuario = ?',
+        [id, req.user.id_usuario],
+      );
       await registrarMovimiento(connection, {
         id_producto: id,
         tipo_movimiento: 'desactivacion',
